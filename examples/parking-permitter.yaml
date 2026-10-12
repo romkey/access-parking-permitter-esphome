@@ -1,0 +1,81 @@
+# The parking permit kiosk: ESP32 Access Control Base Board 0.1.0 with a
+# Wiegand reader and a 3.5" 320x480 SPI touchscreen.
+#
+# Board and pin choices live here, never in packages/.
+# Board: https://github.com/romkey/esp32-access-control
+# Pins come from the board's KiCad PCB (U3 = ESP32-S3-WROOM-1 N16R8):
+#   Wiegand 1 (J5)   D0 GPIO18, D1 GPIO17, LED GPIO16, beep GPIO15
+#   TFT (J2)         CS GPIO3, RST GPIO46, DC GPIO9, SDO/MISO GPIO10,
+#                    SCK GPIO11, SDI/MOSI GPIO13, backlight GPIO12
+#   Touch (J2)       T_CLK GPIO45, T_CS GPIO48, T_DIN GPIO47, T_DO GPIO21,
+#                    T_IRQ GPIO14
+#   Status LED       GPIO8
+
+substitutions:
+  name: parking-permitter
+  friendly_name: Parking Permitter
+  comment: Parking permit kiosk on the ESP32 Access Control Base Board
+
+  status_led_pin: GPIO8
+
+  parking_kiosk_d0_pin: GPIO18
+  parking_kiosk_d1_pin: GPIO17
+  parking_kiosk_reader_led_pin: GPIO16
+  parking_kiosk_reader_beep_pin: GPIO15
+
+  parking_kiosk_display_clk_pin: GPIO11
+  parking_kiosk_display_mosi_pin: GPIO13
+  parking_kiosk_display_miso_pin: GPIO10
+  parking_kiosk_display_cs_pin: GPIO3
+  parking_kiosk_display_dc_pin: GPIO9
+  parking_kiosk_display_reset_pin: GPIO46
+  parking_kiosk_backlight_pin: GPIO12
+  parking_kiosk_touch_clk_pin: GPIO45
+  parking_kiosk_touch_mosi_pin: GPIO47
+  parking_kiosk_touch_miso_pin: GPIO21
+  parking_kiosk_touch_cs_pin: GPIO48
+  parking_kiosk_touch_irq_pin: GPIO14
+
+esp32:
+  board: esp32-s3-devkitc-1
+  framework:
+    type: esp-idf
+  flash_size: 16MB  # ESP32-S3-WROOM-1 N16R8 on this board
+
+# 8 MB octal PSRAM in the N16R8 module (uses GPIO35-37 internally).
+psram:
+  mode: octal
+  speed: 80MHz
+
+# Logs go to the S3's built-in USB, ESPHome's default.
+
+external_components:
+  - source:
+      type: local
+      path: ../components
+    components: [access_list]
+
+packages:
+  base: !include common/base.yaml
+  access_list: !include ../packages/access-list.yaml
+  parking_kiosk: !include ../packages/parking-kiosk.yaml
+  parking_kiosk_display: !include ../packages/parking-kiosk-display.yaml
+  status_led: !include ../packages/status-led.yaml
+
+# The board's PCB routes strapping pins GPIO3, GPIO45 and GPIO46 to the
+# display header, so they're used deliberately. These entries extend the
+# packages' ones to silence ESPHome's strapping pin warning.
+spi:
+  - id: !extend parking_kiosk_touch_spi
+    clk_pin:
+      number: GPIO45
+      ignore_strapping_warning: true
+
+display:
+  - id: !extend parking_kiosk_tft
+    cs_pin:
+      number: GPIO3
+      ignore_strapping_warning: true
+    reset_pin:
+      number: GPIO46
+      ignore_strapping_warning: true

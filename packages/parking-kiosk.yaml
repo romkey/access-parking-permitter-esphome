@@ -1,0 +1,296 @@
+# Parking permit kiosk logic: Wiegand reader, access list check and the
+# Member Zone parking permit webhook.
+#
+# Swipe a fob on the Wiegand reader. If it is on the access list the kiosk
+# greets the member and offers an emailed permit link or a blank permit,
+# either of which POSTs {"rfid": "<facility,card>", "mode": "link"|"blank"}
+# to the webhook with the device token in the X-Device-Token header.
+#
+# Requires:
+#   - packages/access-list.yaml (the access_list component)
+#   - a user interface providing three scripts, as packages/parking-kiosk-
+#     display.yaml does:
+#       parking_kiosk_ui_idle                     show the idle screen
+#       parking_kiosk_ui_member                   greet parking_kiosk_name
+#       parking_kiosk_ui_message(title, body)     show a message
+#     The UI calls parking_kiosk_request_permit(permit_mode) with "link" or
+#     "blank", parking_kiosk_go_idle, and parking_kiosk_activity on touch.
+#   - secrets permit_webhook_url and permit_webhook_token
+#   - the substitutions marked (required) below
+# Include it once: its ids are fixed.
+#
+# Substitutions:
+#   parking_kiosk_d0_pin              Wiegand D0 GPIO (required)
+#   parking_kiosk_d1_pin              Wiegand D1 GPIO (required)
+#   parking_kiosk_reader_led_pin      reader LED wire GPIO (required)
+#   parking_kiosk_reader_beep_pin     reader beeper wire GPIO (required)
+#   parking_kiosk_reader_inverted     "true" if the reader's LED and beeper
+#                                     wires are active-low, as on most
+#                                     readers (default "true")
+#   parking_kiosk_access_list_id      access_list id (default "acl")
+#   parking_kiosk_choice_timeout      idle after no touch on the member
+#                                     screen (default 30s)
+#   parking_kiosk_message_timeout     idle after showing a message (default 10s)
+#   parking_kiosk_webhook_timeout     HTTP request timeout (default 10s)
+#   parking_kiosk_reader_led_name     entity name (default "Reader LED")
+#   parking_kiosk_reader_beep_name    entity name (default "Reader Beep")
+#   parking_kiosk_reader_entity_category  for the two switches (default "config")
+#   parking_kiosk_last_tag_name       entity name (default "Last Tag")
+#   parking_kiosk_last_raw_name       entity name (default "Last Tag Raw")
+#   parking_kiosk_last_h10301_name    entity name (default "Last Tag H10301")
+#   parking_kiosk_tag_entity_category for the three tag sensors
+#                                     (default "diagnostic")
+
+substitutions:
+  parking_kiosk_reader_inverted: "true"
+  parking_kiosk_access_list_id: "acl"
+  parking_kiosk_choice_timeout: "30s"
+  parking_kiosk_message_timeout: "10s"
+  parking_kiosk_webhook_timeout: "10s"
+  parking_kiosk_reader_led_name: "Reader LED"
+  parking_kiosk_reader_beep_name: "Reader Beep"
+  parking_kiosk_reader_entity_category: "config"
+  parking_kiosk_last_tag_name: "Last Tag"
+  parking_kiosk_last_raw_name: "Last Tag Raw"
+  parking_kiosk_last_h10301_name: "Last Tag H10301"
+  parking_kiosk_tag_entity_category: "diagnostic"
+
+http_request:
+  timeout: ${parking_kiosk_webhook_timeout}
+  # Longer than the request timeout, so a slow server isn't a watchdog reset.
+  watchdog_timeout: 15s
+
+globals:
+  # The member currently using the kiosk.
+  - id: parking_kiosk_tag
+    type: std::string
+  - id: parking_kiosk_name
+    type: std::string
+
+output:
+  - platform: gpio
+    pin: ${parking_kiosk_reader_led_pin}
+    id: parking_kiosk_reader_led_output
+    inverted: ${parking_kiosk_reader_inverted}
+  - platform: gpio
+    pin: ${parking_kiosk_reader_beep_pin}
+    id: parking_kiosk_reader_beep_output
+    inverted: ${parking_kiosk_reader_inverted}
+
+switch:
+  # Manual control of the reader's LED and beeper
+  - platform: output
+    name: "${parking_kiosk_reader_led_name}"
+    output: parking_kiosk_reader_led_output
+    id: parking_kiosk_reader_led
+    entity_category: "${parking_kiosk_reader_entity_category}"
+  - platform: output
+    name: "${parking_kiosk_reader_beep_name}"
+    output: parking_kiosk_reader_beep_output
+    id: parking_kiosk_reader_beep
+    entity_category: "${parking_kiosk_reader_entity_category}"
+
+text_sensor:
+  - platform: template
+    name: "${parking_kiosk_last_tag_name}"
+    id: parking_kiosk_last_tag
+    entity_category: "${parking_kiosk_tag_entity_category}"
+  - platform: template
+    name: "${parking_kiosk_last_raw_name}"
+    id: parking_kiosk_last_raw
+    entity_category: "${parking_kiosk_tag_entity_category}"
+  - platform: template
+    name: "${parking_kiosk_last_h10301_name}"
+    id: parking_kiosk_last_h10301
+    entity_category: "${parking_kiosk_tag_entity_category}"
+
+wiegand:
+  - id: parking_kiosk_reader
+    d0: ${parking_kiosk_d0_pin}
+    d1: ${parking_kiosk_d1_pin}
+    on_tag:
+      - logger.log:
+          format: "Tag: %s"
+          args: ['x.c_str()']
+      - text_sensor.template.publish:
+          id: parking_kiosk_last_tag
+          state: !lambda 'return x;'
+      - lambda: |-
+          id(parking_kiosk_tag) = esphome::access_list::AccessList::wiegand26_tag(x);
+          id(parking_kiosk_last_h10301).publish_state(id(parking_kiosk_tag));
+          std::string name;
+          const std::string &tag = id(parking_kiosk_tag);
+          if (!tag.empty() && id(${parking_kiosk_access_list_id}).lookup(tag, &name)) {
+            ESP_LOGI("permit", "Known fob %s: %s", tag.c_str(), name.c_str());
+            id(parking_kiosk_name) = name;
+            id(parking_kiosk_member_found).execute();
+          } else {
+            ESP_LOGW("permit", "Unknown fob %s", x.c_str());
+            id(parking_kiosk_name).clear();
+            id(parking_kiosk_member_unknown).execute();
+          }
+    on_key:
+      - logger.log:
+          format: "Key: %c"
+          args: ['x']
+    on_raw:
+      - logger.log:
+          format: "Raw: %d bits, value 0x%llx"
+          args: ['bits', 'value']
+      - lambda: |-
+          char raw[24];
+          snprintf(raw, sizeof(raw), "0x%llx", (unsigned long long) value);
+          id(parking_kiosk_last_raw).publish_state(raw);
+
+script:
+  # Short beep plus reader LED flash on a successful card read
+  - id: parking_kiosk_acknowledge
+    then:
+      - switch.turn_on: parking_kiosk_reader_led
+      - switch.turn_on: parking_kiosk_reader_beep
+      - delay: 150ms
+      - switch.turn_off: parking_kiosk_reader_beep
+      - delay: 350ms
+      - switch.turn_off: parking_kiosk_reader_led
+
+  # Three short beeps for a fob that isn't on the list
+  - id: parking_kiosk_reject
+    then:
+      - repeat:
+          count: 3
+          then:
+            - switch.turn_on: parking_kiosk_reader_beep
+            - delay: 80ms
+            - switch.turn_off: parking_kiosk_reader_beep
+            - delay: 80ms
+
+  - id: parking_kiosk_go_idle
+    then:
+      - script.stop: parking_kiosk_choice_timeout
+      - script.stop: parking_kiosk_message_timeout
+      - lambda: |-
+          id(parking_kiosk_tag).clear();
+          id(parking_kiosk_name).clear();
+      - script.execute: parking_kiosk_ui_idle
+
+  # The UI calls this on any touch; it counts as activity on the member screen.
+  - id: parking_kiosk_activity
+    then:
+      - if:
+          condition:
+            script.is_running: parking_kiosk_choice_timeout
+          then:
+            - script.execute: parking_kiosk_choice_timeout
+
+  - id: parking_kiosk_choice_timeout
+    mode: restart
+    then:
+      - delay: ${parking_kiosk_choice_timeout}
+      - script.execute: parking_kiosk_go_idle
+
+  - id: parking_kiosk_message_timeout
+    mode: restart
+    then:
+      - delay: ${parking_kiosk_message_timeout}
+      - script.execute: parking_kiosk_go_idle
+
+  - id: parking_kiosk_member_found
+    then:
+      - script.execute: parking_kiosk_acknowledge
+      - script.stop: parking_kiosk_message_timeout
+      - script.execute: parking_kiosk_ui_member
+      - script.execute: parking_kiosk_choice_timeout
+
+  - id: parking_kiosk_member_unknown
+    then:
+      - script.execute: parking_kiosk_reject
+      - script.execute:
+          id: parking_kiosk_show_message
+          title: "Unknown fob"
+          body: "This fob isn't registered for parking permits. Please check with an organizer."
+
+  - id: parking_kiosk_show_message
+    mode: restart
+    parameters:
+      title: string
+      body: string
+    then:
+      - script.stop: parking_kiosk_choice_timeout
+      - script.execute:
+          id: parking_kiosk_ui_message
+          title: !lambda "return title;"
+          body: !lambda "return body;"
+      - script.execute: parking_kiosk_message_timeout
+
+  # Calls the Member Zone device webhook. permit_mode is "link" or "blank".
+  - id: parking_kiosk_request_permit
+    mode: single
+    parameters:
+      permit_mode: string
+    then:
+      - script.stop: parking_kiosk_choice_timeout
+      - script.execute:
+          id: parking_kiosk_show_message
+          title: "One moment..."
+          body: "Requesting your parking permit."
+      # The request blocks the main loop, so let the UI draw the message first.
+      - delay: 150ms
+      - http_request.post:
+          url: !secret permit_webhook_url
+          request_headers:
+            Content-Type: application/json
+            X-Device-Token: !secret permit_webhook_token
+          json: !lambda |-
+            root["rfid"] = id(parking_kiosk_tag);
+            root["mode"] = permit_mode;
+          capture_response: true
+          max_response_buffer_size: 2kB
+          on_response:
+            then:
+              - lambda: |-
+                  int status = response->status_code;
+                  ESP_LOGI("permit", "Webhook replied %d: %s", status, body.c_str());
+                  JsonDocument doc = json::parse_json(body);
+                  std::string error = doc["error"] | "";
+                  std::string title, message;
+
+                  if (status == 201) {
+                    if (permit_mode == "blank") {
+                      // expires_at is ISO 8601; show the date part as M/D/YYYY.
+                      std::string expires = doc["permit"]["expires_at"] | "";
+                      int y, m, d;
+                      std::string date = expires;
+                      if (sscanf(expires.c_str(), "%d-%d-%d", &y, &m, &d) == 3)
+                        date = std::to_string(m) + "/" + std::to_string(d) + "/" + std::to_string(y);
+                      title = "Blank permit issued";
+                      message = "Write \"Expires " + date + "\" on your permit. "
+                                "We've emailed you a link to add the details.";
+                    } else {
+                      title = "Check your email";
+                      message = "We've sent you a link to create and print your parking permit.";
+                    }
+                  } else if (status == 404) {
+                    title = "Member not found";
+                    message = "Member Zone doesn't recognize this fob. Please check with an organizer.";
+                  } else if (status == 401) {
+                    title = "Kiosk not authorized";
+                    message = "This kiosk's webhook token was rejected. Please tell an organizer.";
+                  } else if (status == 429) {
+                    title = "Too many requests";
+                    message = "Please wait a minute and try again.";
+                  } else {
+                    title = "Couldn't issue a permit";
+                    message = error.empty() ? "Member Zone returned error " + std::to_string(status) + "." : error;
+                    if (!message.empty())
+                      message[0] = toupper(message[0]);
+                  }
+                  id(parking_kiosk_show_message).execute(title, message);
+          on_error:
+            then:
+              - logger.log:
+                  level: WARN
+                  format: "Webhook request failed"
+              - script.execute:
+                  id: parking_kiosk_show_message
+                  title: "Couldn't reach Member Zone"
+                  body: "Please try again in a moment."

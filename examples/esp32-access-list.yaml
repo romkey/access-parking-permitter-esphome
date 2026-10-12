@@ -1,0 +1,29 @@
+# Example: the access list alone on an ESP32 DevKit (Xtensa, original ESP32).
+#
+# Proves packages/access-list.yaml and the access_list component build on
+# the original ESP32. Use it as a starting point for another device that
+# checks fobs against the synced list.
+# Board: https://docs.espressif.com/projects/esp-dev-kits/en/latest/esp32/esp32-devkitc/user_guide.html
+
+substitutions:
+  name: access-list-esp32
+  comment: Access list example on an ESP32 DevKit
+  friendly_name: Access List ESP32
+
+esp32:
+  board: esp32dev
+  framework:
+    type: esp-idf
+  # The smallest ESP32-WROOM-32E (N4) and the esp32dev default; the module
+  # also comes with 8 or 16 MB. Set it to your module's size.
+  flash_size: 4MB
+
+external_components:
+  - source:
+      type: local
+      path: ../components
+    components: [access_list]
+
+packages:
+  base: !include common/base.yaml
+  access_list: !include ../packages/access-list.yaml

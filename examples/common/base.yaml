@@ -1,0 +1,76 @@
+# Settings shared by every example: project version, networking, security,
+# recovery and the standard esphome-lib packages.
+#
+# Not an example itself (scripts/list-examples.sh only looks one level deep).
+# Each example sets name, friendly_name, board and pins, then includes this.
+
+substitutions:
+  # Must match the release tag without the "v"; the release workflow checks.
+  project_version: "0.1.0"
+
+esphome:
+  name: ${name}
+  friendly_name: ${friendly_name}
+  # Shown on the device's page in Home Assistant.
+  comment: ${comment}
+  # The ESPHome release these configs were tested with; older ones fail
+  # with a clear message instead of confusing validation errors.
+  min_version: 2026.9.0
+  project:
+    name: romkey.access-parking-permitter-esphome
+    version: ${project_version}
+
+packages:
+  esp32: github://romkey/esphome-lib/lib/esp32.yml@v0.2.0
+  wifi_diagnostics: github://romkey/esphome-lib/lib/wifi-diagnostics.yml@v0.2.0
+  restart: github://romkey/esphome-lib/lib/restart.yml@v0.2.0
+
+logger:
+
+api:
+  encryption:
+    key: !secret api_encryption_key
+
+# OTA reuses the api encryption key. Don't add an OTA password; ESPHome
+# deprecated it.
+ota:
+  - platform: esphome
+    encryption:
+
+wifi:
+  ssid: !secret wifi_ssid
+  password: !secret wifi_password
+  # Fallback hotspot with a captive portal if the configured network is
+  # unreachable. Remove both on flash-constrained devices.
+  ap:
+    password: !secret fallback_ap_password
+
+captive_portal:
+
+# Local web UI. Version 3 must be set explicitly (ESPHome defaults to 2).
+# Password-protected (digest, so the password isn't sent in the clear) so
+# other people on the network can't use the controls. Its firmware upload
+# page is off: it's unencrypted, and encrypted OTA above covers updates.
+web_server:
+  version: 3
+  ota: false
+  auth:
+    type: digest
+    username: !secret web_server_username
+    password: !secret web_server_password
+
+# Clock from Home Assistant, for timestamps, schedules and daily totals.
+# Add an sntp platform if the device must keep time without Home Assistant.
+time:
+  - platform: homeassistant
+    id: homeassistant_time
+
+button:
+  # Reboot into safe mode (OTA only) to recover from a bad configuration.
+  - platform: safe_mode
+    name: "Safe Mode Boot"
+    entity_category: config
+  # Forget Wi-Fi and all settings, e.g. before giving the device away.
+  - platform: factory_reset
+    name: "Factory Reset"
+    entity_category: config

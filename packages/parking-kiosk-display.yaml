@@ -1,0 +1,254 @@
+# User interface package: the parking kiosk's touchscreen.
+#
+# A 320x480 SPI TFT with an XPT2046 resistive touch controller, drawn with
+# LVGL. Kept separate from packages/parking-kiosk.yaml so the kiosk logic can
+# drive a different UI: this package implements the three scripts that
+# package calls (parking_kiosk_ui_idle, parking_kiosk_ui_member and
+# parking_kiosk_ui_message).
+#
+# The common red 3.5" 320x480 SPI module (MSP3520) pairs an ILI9488 with an
+# XPT2046. The display and touch controller use separate SPI buses, which
+# avoids the ILI9488's habit of not releasing MISO. The ST7796 version of the
+# module (MSP3526) has the same pinout: if colors or orientation look wrong,
+# set parking_kiosk_display_model to ST7796.
+#
+# Requires: packages/parking-kiosk.yaml and the substitutions marked
+# (required) below. Include it once: its ids are fixed.
+#
+# Substitutions:
+#   parking_kiosk_display_clk_pin        TFT SCK GPIO (required)
+#   parking_kiosk_display_mosi_pin       TFT SDI/MOSI GPIO (required)
+#   parking_kiosk_display_miso_pin       TFT SDO/MISO GPIO (required)
+#   parking_kiosk_display_cs_pin         TFT CS GPIO (required)
+#   parking_kiosk_display_dc_pin         TFT DC GPIO (required)
+#   parking_kiosk_display_reset_pin      TFT RST GPIO (required)
+#   parking_kiosk_backlight_pin          backlight GPIO, PWM (required)
+#   parking_kiosk_touch_clk_pin          touch T_CLK GPIO (required)
+#   parking_kiosk_touch_mosi_pin         touch T_DIN GPIO (required)
+#   parking_kiosk_touch_miso_pin         touch T_DO GPIO (required)
+#   parking_kiosk_touch_cs_pin           touch T_CS GPIO (required)
+#   parking_kiosk_touch_irq_pin          touch T_IRQ GPIO (required)
+#   parking_kiosk_display_model          mipi_spi model (default ILI9488)
+#   parking_kiosk_display_data_rate      SPI clock (default 40MHz)
+#   parking_kiosk_touch_x_min ... _y_max touch calibration (defaults 280,
+#                                        3860, 340, 3860: typical for these
+#                                        modules)
+#   parking_kiosk_backlight_name         entity name (default "Backlight")
+#   parking_kiosk_backlight_entity_category  (default "config")
+#
+# To calibrate the touchscreen, set the logger to DEBUG, touch each corner
+# and copy the raw values the xpt2046 component logs.
+
+substitutions:
+  parking_kiosk_display_model: ILI9488
+  parking_kiosk_display_data_rate: 40MHz
+  parking_kiosk_touch_x_min: "280"
+  parking_kiosk_touch_x_max: "3860"
+  parking_kiosk_touch_y_min: "340"
+  parking_kiosk_touch_y_max: "3860"
+  parking_kiosk_backlight_name: "Backlight"
+  parking_kiosk_backlight_entity_category: "config"
+
+output:
+  - platform: ledc
+    pin: ${parking_kiosk_backlight_pin}
+    id: parking_kiosk_backlight_output
+
+light:
+  - platform: monochromatic
+    name: "${parking_kiosk_backlight_name}"
+    id: parking_kiosk_backlight
+    output: parking_kiosk_backlight_output
+    entity_category: "${parking_kiosk_backlight_entity_category}"
+    restore_mode: ALWAYS_ON
+    default_transition_length: 0s
+
+spi:
+  - id: parking_kiosk_display_spi
+    clk_pin: ${parking_kiosk_display_clk_pin}
+    mosi_pin: ${parking_kiosk_display_mosi_pin}
+    miso_pin: ${parking_kiosk_display_miso_pin}
+  - id: parking_kiosk_touch_spi
+    clk_pin: ${parking_kiosk_touch_clk_pin}
+    mosi_pin: ${parking_kiosk_touch_mosi_pin}
+    miso_pin: ${parking_kiosk_touch_miso_pin}
+
+display:
+  - platform: mipi_spi
+    id: parking_kiosk_tft
+    model: ${parking_kiosk_display_model}
+    spi_id: parking_kiosk_display_spi
+    cs_pin: ${parking_kiosk_display_cs_pin}
+    dc_pin: ${parking_kiosk_display_dc_pin}
+    reset_pin: ${parking_kiosk_display_reset_pin}
+    data_rate: ${parking_kiosk_display_data_rate}
+    auto_clear_enabled: false
+    update_interval: never
+
+touchscreen:
+  - platform: xpt2046
+    id: parking_kiosk_touch
+    spi_id: parking_kiosk_touch_spi
+    display: parking_kiosk_tft
+    cs_pin: ${parking_kiosk_touch_cs_pin}
+    interrupt_pin: ${parking_kiosk_touch_irq_pin}
+    calibration:
+      x_min: ${parking_kiosk_touch_x_min}
+      x_max: ${parking_kiosk_touch_x_max}
+      y_min: ${parking_kiosk_touch_y_min}
+      y_max: ${parking_kiosk_touch_y_max}
+    on_touch:
+      - script.execute: parking_kiosk_activity
+
+lvgl:
+  id: parking_kiosk_lvgl
+  displays: [parking_kiosk_tft]
+  touchscreens: [parking_kiosk_touch]
+  buffer_size: 25%
+  style_definitions:
+    - id: parking_kiosk_page_style
+      bg_color: 0x0E1A2B
+      text_color: 0xFFFFFF
+      pad_all: 20
+    - id: parking_kiosk_big_button
+      width: 100%
+      height: 80
+      radius: 14
+      text_font: montserrat_24
+  theme:
+    label:
+      text_color: 0xFFFFFF
+  pages:
+    - id: parking_kiosk_idle_page
+      styles: parking_kiosk_page_style
+      widgets:
+        - label:
+            align: CENTER
+            width: 100%
+            long_mode: WRAP
+            text_align: CENTER
+            text_font: montserrat_40
+            text: "Swipe RFID fob for parking permit"
+
+    - id: parking_kiosk_member_page
+      styles: parking_kiosk_page_style
+      layout:
+        type: flex
+        flex_flow: COLUMN
+        flex_align_main: CENTER
+        flex_align_cross: CENTER
+        pad_row: 18
+      widgets:
+        - label:
+            id: parking_kiosk_greeting_label
+            width: 100%
+            long_mode: WRAP
+            text_align: CENTER
+            text_font: montserrat_40
+            text: "Hi!"
+        - label:
+            width: 100%
+            text_align: CENTER
+            text_font: montserrat_24
+            text_color: 0xB8C4D6
+            text: "Parking permit:"
+        - button:
+            id: parking_kiosk_link_button
+            styles: parking_kiosk_big_button
+            bg_color: 0x2E7D32
+            widgets:
+              - label:
+                  align: CENTER
+                  text: "Email me a link"
+            on_click:
+              - script.execute:
+                  id: parking_kiosk_request_permit
+                  permit_mode: link
+        - button:
+            id: parking_kiosk_blank_button
+            styles: parking_kiosk_big_button
+            bg_color: 0x1565C0
+            widgets:
+              - label:
+                  align: CENTER
+                  text: "Blank permit"
+            on_click:
+              - script.execute:
+                  id: parking_kiosk_request_permit
+                  permit_mode: blank
+        - button:
+            id: parking_kiosk_cancel_button
+            styles: parking_kiosk_big_button
+            bg_color: 0x4A5568
+            widgets:
+              - label:
+                  align: CENTER
+                  text: "Cancel"
+            on_click:
+              - script.execute: parking_kiosk_go_idle
+
+    - id: parking_kiosk_message_page
+      styles: parking_kiosk_page_style
+      layout:
+        type: flex
+        flex_flow: COLUMN
+        flex_align_main: CENTER
+        flex_align_cross: CENTER
+        pad_row: 24
+      widgets:
+        - label:
+            id: parking_kiosk_message_title
+            width: 100%
+            long_mode: WRAP
+            text_align: CENTER
+            text_font: montserrat_36
+            text: ""
+        - label:
+            id: parking_kiosk_message_body
+            width: 100%
+            long_mode: WRAP
+            text_align: CENTER
+            text_font: montserrat_24
+            text: ""
+        - button:
+            id: parking_kiosk_ok_button
+            styles: parking_kiosk_big_button
+            bg_color: 0x4A5568
+            widgets:
+              - label:
+                  align: CENTER
+                  text: "OK"
+            on_click:
+              - script.execute: parking_kiosk_go_idle
+
+script:
+  - id: parking_kiosk_ui_idle
+    then:
+      - lvgl.page.show:
+          id: parking_kiosk_idle_page
+          animation: NONE
+
+  - id: parking_kiosk_ui_member
+    then:
+      - lvgl.label.update:
+          id: parking_kiosk_greeting_label
+          text: !lambda 'return ("Hi, " + id(parking_kiosk_name) + "!").c_str();'
+      - lvgl.page.show:
+          id: parking_kiosk_member_page
+          animation: NONE
+
+  - id: parking_kiosk_ui_message
+    mode: restart
+    parameters:
+      title: string
+      body: string
+    then:
+      - lvgl.label.update:
+          id: parking_kiosk_message_title
+          text: !lambda "return title.c_str();"
+      - lvgl.label.update:
+          id: parking_kiosk_message_body
+          text: !lambda "return body.c_str();"
+      - lvgl.page.show:
+          id: parking_kiosk_message_page
+          animation: NONE

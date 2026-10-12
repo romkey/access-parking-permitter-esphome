@@ -1,0 +1,32 @@
+# Example: the access list alone on an ESP32-C3 DevKitM-1 (RISC-V).
+#
+# Proves packages/access-list.yaml and the access_list component build on
+# RISC-V.
+# Board: https://docs.espressif.com/projects/esp-dev-kits/en/latest/esp32c3/esp32-c3-devkitm-1/user_guide.html
+
+substitutions:
+  name: access-list-esp32-c3
+  comment: Access list example on an ESP32-C3 DevKitM-1
+  friendly_name: Access List ESP32-C3
+
+esp32:
+  board: esp32-c3-devkitm-1
+  framework:
+    type: esp-idf
+  flash_size: 4MB  # 4 MB flash in the module, per the board docs above
+
+# Its Micro-USB port goes through a USB-to-UART bridge to UART0, but ESPHome
+# logs to the C3's built-in USB by default; without this, logs and Improv
+# serial never reach the port.
+logger:
+  hardware_uart: UART0
+
+external_components:
+  - source:
+      type: local
+      path: ../components
+    components: [access_list]
+
+packages:
+  base: !include common/base.yaml
+  access_list: !include ../packages/access-list.yaml

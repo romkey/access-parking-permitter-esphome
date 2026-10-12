@@ -1,0 +1,55 @@
+# RFID access list, synced over the ESPHome native API.
+#
+# Adds the access_list component and four API actions that an uploader calls
+# to replace the list. The list is stored in NVS and survives reboots. See
+# docs/configuration.md for the upload protocol.
+#
+# Requires: the access_list external component (components/access_list) and
+# an encrypted api: (examples/common/base.yaml provides one). ESP32 only.
+#
+# Substitutions:
+#   access_list_id      component id, for lookups from lambdas (default "acl")
+#   access_list_action  prefix for the API action names (default "acl"),
+#                       giving acl_info, acl_begin, acl_add and acl_commit;
+#                       change both if the package is included twice
+
+substitutions:
+  access_list_id: "acl"
+  access_list_action: "acl"
+
+access_list:
+  id: ${access_list_id}
+
+# Each action replies with success or an error message so the uploader can
+# stop on the first failure.
+api:
+  actions:
+    - action: ${access_list_action}_info
+      then:
+        - api.respond:
+            data: !lambda |-
+              root["version"] = id(${access_list_id}).version();
+              root["count"] = id(${access_list_id}).size();
+    - action: ${access_list_action}_begin
+      variables:
+        list_version: string
+        count: int
+      then:
+        - lambda: "id(${access_list_id}).begin(list_version, count);"
+        - api.respond:
+            success: !lambda "return id(${access_list_id}).last_error().empty();"
+            error_message: !lambda "return id(${access_list_id}).last_error();"
+    - action: ${access_list_action}_add
+      variables:
+        records: string
+      then:
+        - lambda: "id(${access_list_id}).add(records);"
+        - api.respond:
+            success: !lambda "return id(${access_list_id}).last_error().empty();"
+            error_message: !lambda "return id(${access_list_id}).last_error();"
+    - action: ${access_list_action}_commit
+      then:
+        - lambda: "id(${access_list_id}).commit();"
+        - api.respond:
+            success: !lambda "return id(${access_list_id}).last_error().empty();"
+            error_message: !lambda "return id(${access_list_id}).last_error();"

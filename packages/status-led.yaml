@@ -1,0 +1,19 @@
+# User interface package: a status LED that blinks on warnings and errors.
+#
+# Kept separate from the sensing packages so devices without an LED can leave
+# it out.
+#
+# Requires: the substitution status_led_pin (no default, the example picks
+# the pin for its board).
+#
+# Substitutions:
+#   status_led_pin       GPIO the LED is on, e.g. GPIO4 (required)
+#   status_led_inverted  "true" if the LED is wired active-low (default false)
+
+substitutions:
+  status_led_inverted: "false"
+
+status_led:
+  pin:
+    number: ${status_led_pin}
+    inverted: ${status_led_inverted}
