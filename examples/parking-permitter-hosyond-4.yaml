@@ -1,0 +1,101 @@
+# The parking permit kiosk on a Hosyond 4" ESP32 display: QDtech/lcdwiki
+# E32R40T, an ESP32-32E with a 320x480 ST7796 and XPT2046 resistive touch.
+#
+# Board and pin choices live here, never in packages/.
+# Board: https://www.lcdwiki.com/4.0inch_ESP32-32E_Display
+# Pins come from section 4.2 of the E32R40T specification:
+# https://www.lcdwiki.com/res/E32R40T/E32R40T_E32N40T_Specification_V1.0.pdf
+#   LCD              CS IO15, DC IO2, backlight IO27; reset is tied to EN
+#   LCD and touch    one shared SPI bus: SCK IO14, MOSI IO13, MISO IO12
+#   Touch            CS IO33, IRQ IO36
+#   RGB LED          red IO22, green IO16, blue IO17 (active-low)
+#   Free on headers  SPI header IO21/18/19/23 (IO18/19/23 shared with the
+#                    MicroSD slot), I2C header IO25/IO32, input header
+#                    IO35/IO39 (input only)
+#
+# The board has no Wiegand interface. The reader pins below are free header
+# pins, not a tested wiring: D0/D1 on the input header (IO35/IO39 are input
+# only and have no pull-ups, and most readers drive 5 V, so the reader needs
+# level shifting), LED and beep on the I2C header. Change them to suit how
+# the reader ends up connected.
+
+substitutions:
+  name: parking-permitter-hosyond
+  friendly_name: Parking Permitter
+  comment: Parking permit kiosk on a Hosyond 4" ESP32 display (E32R40T)
+
+  # The onboard RGB LED's red channel, common anode.
+  status_led_pin: GPIO22
+  status_led_inverted: "true"
+
+  parking_kiosk_d0_pin: GPIO35
+  parking_kiosk_d1_pin: GPIO39
+  parking_kiosk_reader_led_pin: GPIO25
+  parking_kiosk_reader_beep_pin: GPIO32
+
+  parking_kiosk_display_model: ST7796
+  parking_kiosk_display_clk_pin: GPIO14
+  parking_kiosk_display_mosi_pin: GPIO13
+  parking_kiosk_display_miso_pin: GPIO12
+  parking_kiosk_display_cs_pin: GPIO15
+  parking_kiosk_display_dc_pin: GPIO2
+  parking_kiosk_backlight_pin: GPIO27
+  parking_kiosk_touch_cs_pin: GPIO33
+  parking_kiosk_touch_irq_pin: GPIO36
+  # Touch shares the display's bus, and the LCD resets with the ESP32, so
+  # the package's touch bus and reset pin are removed below. The package
+  # still needs these set.
+  parking_kiosk_display_reset_pin: GPIO14
+  parking_kiosk_touch_clk_pin: GPIO14
+  parking_kiosk_touch_mosi_pin: GPIO13
+  parking_kiosk_touch_miso_pin: GPIO12
+
+esp32:
+  board: esp32dev
+  framework:
+    type: esp-idf
+  flash_size: 4MB  # ESP32-32E with 4 MB flash, per the specification, 3.1
+
+# USB-C goes through the board's USB-to-serial auto-download circuit.
+logger:
+  hardware_uart: UART0
+
+external_components:
+  - source:
+      type: local
+      path: ../components
+    components: [access_list]
+
+packages:
+  base: !include common/base.yaml
+  access_list: !include ../packages/access-list.yaml
+  parking_kiosk: !include ../packages/parking-kiosk.yaml
+  parking_kiosk_display: !include ../packages/parking-kiosk-display.yaml
+  status_led: !include ../packages/status-led.yaml
+
+# One SPI bus for the LCD and touch. GPIO2, GPIO12 and GPIO15 are strapping
+# pins the board routes to the LCD, so they're used deliberately.
+spi:
+  - id: !remove parking_kiosk_touch_spi
+  - id: !extend parking_kiosk_display_spi
+    miso_pin:
+      number: GPIO12
+      ignore_strapping_warning: true
+
+display:
+  - id: !extend parking_kiosk_tft
+    reset_pin: !remove
+    cs_pin:
+      number: GPIO15
+      ignore_strapping_warning: true
+    dc_pin:
+      number: GPIO2
+      ignore_strapping_warning: true
+
+touchscreen:
+  - id: !extend parking_kiosk_touch
+    spi_id: parking_kiosk_display_spi
+
+# No PSRAM: a smaller draw buffer leaves internal RAM for Wi-Fi and TLS.
+lvgl:
+  buffer_size: 10%

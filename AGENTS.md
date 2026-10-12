@@ -9,7 +9,9 @@ open a pull request; CI and Lint must pass before it can merge.
 <!-- Project-specific notes go below. -->
 
 - This is an application: the parking permit kiosk in
-  `examples/parking-permitter.yaml`. The other two examples only prove
+  `examples/parking-permitter.yaml`, and the same kiosk on a Hosyond 4"
+  display in `examples/parking-permitter-hosyond-4.yaml`. The other two
+  examples only prove
   `packages/access-list.yaml` and `components/access_list` build on ESP32
   and ESP32-C3.
 - The `acl_*` API actions, their variable names and the record format are

@@ -15,6 +15,9 @@ All notable changes to this project are documented here. The format follows
 - `packages/parking-kiosk-display.yaml`: the LVGL touchscreen UI.
 - `examples/parking-permitter.yaml` for the ESP32 Access Control Base
   Board, plus ESP32 and ESP32-C3 access list examples.
+- `examples/parking-permitter-hosyond-4.yaml`: the kiosk on a Hosyond 4"
+  ESP32 display (lcdwiki E32R40T, ST7796 + XPT2046 on one SPI bus). The
+  Wiegand reader pins are free header pins, not a tested wiring.
 - Fallback hotspot, captive portal, safe mode and factory reset buttons,
   password-protected web server, esphome-lib packages.
 - Docker, CI, lint, release and Renovate setup per
