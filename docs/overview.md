@@ -14,7 +14,8 @@ Also a Hosyond 4" ESP32-32E display (E32R40T: ST7796 + XPT2046).
   atomic replace via begin/add/commit.
 - `packages/access-list.yaml`: component + `acl_info/begin/add/commit` API
   actions.
-- `packages/parking-kiosk.yaml`: reader, lookup, beeps, scripts, webhook.
+- `packages/parking-kiosk.yaml`: reader, Present Fob text entity, lookup,
+  beeps, scripts, webhook.
 - `packages/parking-kiosk-display.yaml`: LVGL UI; implements the
   `parking_kiosk_ui_*` scripts.
 - `packages/status-led.yaml`: status LED.

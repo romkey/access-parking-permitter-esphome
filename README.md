@@ -38,6 +38,9 @@ the kiosk recognizes members without a network round trip.
   **Email me a link**, **Blank permit** and **Cancel** buttons. With no
   touch for 30 seconds, it goes back to idle.
 - Unknown fob: three beeps, then an "Unknown fob" message.
+- To try the kiosk without a fob or reader, type `facility,card` (e.g.
+  `99,999`) into the **Present Fob** text entity in Home Assistant or the
+  web UI. The kiosk handles it exactly like a swipe.
 - Either permit button POSTs `{"rfid": "<facility,card>", "mode": "link"|"blank"}`
   to the `permit_webhook_url` secret, with `permit_webhook_token` in the
   `X-Device-Token` header. The screen shows the result, such as "Check your
@@ -93,7 +96,8 @@ The board has no Wiegand interface, and the reader wiring hasn't been
 worked out: the reader pins are just free header pins. IO35 and IO39 are
 input only with no pull-ups, and most readers run at 5 V, so the reader
 needs level shifting. Change the `parking_kiosk_*` reader substitutions to
-match however it gets connected.
+match however it gets connected. Until then, use the **Present Fob** text
+entity to present fobs.
 
 The example removes the display package's separate touch bus and LCD reset
 pin with `!remove`, and shrinks the LVGL buffer to 10% because the board has
