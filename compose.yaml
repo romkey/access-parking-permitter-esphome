@@ -63,7 +63,7 @@ services:
       - .:/project
       - lint-cache:/root/.cache
     working_dir: /project
-    command: uvx pre-commit@4.6.2 run --all-files --show-diff-on-failure
+    command: uvx pre-commit@4.7.0 run --all-files --show-diff-on-failure
 
   # Scans every commit in the git history for secrets, like CI does.
   secrets:
