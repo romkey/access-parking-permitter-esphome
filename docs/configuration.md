@@ -101,6 +101,14 @@ strings), such as `packages/parking-kiosk-display.yaml`; secrets
 | `parking_kiosk_last_raw_name` | `Last Tag Raw` | Bits as hex |
 | `parking_kiosk_last_h10301_name` | `Last Tag H10301` | `facility,card` |
 | `parking_kiosk_tag_entity_category` | `diagnostic` | Category of the tag sensors |
+| `parking_kiosk_fob_input_name` | `Present Fob` | Text entity name |
+| `parking_kiosk_fob_input_entity_category` | `config` | Category of the text entity |
+
+Setting the **Present Fob** text entity to `facility,card` (e.g. `99,999`)
+handles that fob exactly as if it had been swiped on the reader: the same
+lookup, beeps, screens and webhook. Input that isn't `0-255,0-65535` is
+logged and ignored. Anyone who can set the entity can request a permit for
+any member, so keep the API and web server protected.
 
 ```yaml
 substitutions:

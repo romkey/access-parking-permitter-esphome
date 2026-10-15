@@ -18,6 +18,11 @@ All notable changes to this project are documented here. The format follows
 - Access List Records and Access List Updated diagnostic sensors in
   `packages/access-list.yaml` (`records` and `last_updated` options on
   `access_list`). The update time is stored in NVS with the list.
+- `examples/parking-permitter-hosyond-4.yaml`: the kiosk on a Hosyond 4"
+  ESP32 display (lcdwiki E32R40T, ST7796 + XPT2046 on one SPI bus). The
+  Wiegand reader pins are free header pins, not a tested wiring.
+- Present Fob text entity in `packages/parking-kiosk.yaml`: enter a fob as
+  `facility,card` and the kiosk handles it as if it had been swiped.
 - Fallback hotspot, captive portal, safe mode and factory reset buttons,
   password-protected web server, esphome-lib packages.
 - Docker, CI, lint, release and Renovate setup per
