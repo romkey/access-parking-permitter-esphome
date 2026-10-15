@@ -17,7 +17,7 @@ substitutions:
   comment: Parking permit kiosk on the ESP32 Access Control Base Board
 
   status_led_pin: GPIO8
-
+  parking_kiosk_display_data_rate: 10MHz
   parking_kiosk_d0_pin: GPIO18
   parking_kiosk_d1_pin: GPIO17
   parking_kiosk_reader_led_pin: GPIO16
