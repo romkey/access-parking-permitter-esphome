@@ -12,13 +12,23 @@
 #   access_list_action  prefix for the API action names (default "acl"),
 #                       giving acl_info, acl_begin, acl_add and acl_commit;
 #                       change both if the package is included twice
+#   access_list_records_name       entity name (default "Access List Records")
+#   access_list_last_updated_name  entity name (default "Access List Updated")
 
 substitutions:
   access_list_id: "acl"
   access_list_action: "acl"
+  access_list_records_name: "Access List Records"
+  access_list_last_updated_name: "Access List Updated"
 
+# The update time comes from the clock when acl_commit runs; it stays unknown
+# if the clock hasn't been set (no time: source, or not yet synced).
 access_list:
   id: ${access_list_id}
+  records:
+    name: "${access_list_records_name}"
+  last_updated:
+    name: "${access_list_last_updated_name}"
 
 # Each action replies with success or an error message so the uploader can
 # stop on the first failure.
