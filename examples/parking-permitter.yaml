@@ -5,8 +5,8 @@
 # Board: https://github.com/romkey/esp32-access-control
 # Pins come from the board's KiCad PCB (U3 = ESP32-S3-WROOM-1 N16R8):
 #   Wiegand 1 (J5)   D0 GPIO18, D1 GPIO17, LED GPIO16, beep GPIO15
-#   TFT (J2)         CS GPIO3, RST GPIO46, DC GPIO9, SDO/MISO GPIO10,
-#                    SCK GPIO11, SDI/MOSI GPIO13, backlight GPIO12
+#   TFT (J2)         CS GPIO3, RST GPIO46, DC GPIO9, SDI/MOSI GPIO10,
+#                    SCK GPIO11, SDO/MISO GPIO13, backlight GPIO12
 #   Touch (J2)       T_CLK GPIO45, T_CS GPIO48, T_DIN GPIO47, T_DO GPIO21,
 #                    T_IRQ GPIO14
 #   Status LED       GPIO8
@@ -79,3 +79,7 @@ display:
     reset_pin:
       number: GPIO46
       ignore_strapping_warning: true
+    # This module's panel is mounted mirrored left to right.
+    transform:
+      mirror_x: true
+      mirror_y: false
