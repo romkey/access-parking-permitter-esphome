@@ -1,6 +1,6 @@
 import esphome.codegen as cg
-from esphome.components import sensor, text_sensor
 import esphome.config_validation as cv
+from esphome.components import sensor, text_sensor
 from esphome.const import (
     CONF_ID,
     DEVICE_CLASS_TIMESTAMP,
@@ -44,4 +44,6 @@ async def to_code(config):
     if records := config.get(CONF_RECORDS):
         cg.add(var.set_records_sensor(await sensor.new_sensor(records)))
     if last_updated := config.get(CONF_LAST_UPDATED):
-        cg.add(var.set_last_updated_sensor(await text_sensor.new_text_sensor(last_updated)))
+        cg.add(
+            var.set_last_updated_sensor(await text_sensor.new_text_sensor(last_updated))
+        )
