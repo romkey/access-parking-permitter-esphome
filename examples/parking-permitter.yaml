@@ -24,8 +24,8 @@ substitutions:
   parking_kiosk_reader_beep_pin: GPIO15
 
   parking_kiosk_display_clk_pin: GPIO11
-  parking_kiosk_display_mosi_pin: GPIO13
-  parking_kiosk_display_miso_pin: GPIO10
+  parking_kiosk_display_mosi_pin: GPIO10
+  parking_kiosk_display_miso_pin: GPIO13
   parking_kiosk_display_cs_pin: GPIO3
   parking_kiosk_display_dc_pin: GPIO9
   parking_kiosk_display_reset_pin: GPIO46
