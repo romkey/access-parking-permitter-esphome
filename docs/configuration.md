@@ -7,6 +7,12 @@ RFID access list stored in NVS as `tag<TAB>name<LF>` lines. ESP32 only.
 | Option | Default | Meaning |
 |--------|---------|---------|
 | `id` | (generated) | Id for lambdas |
+| `records` | (none) | Sensor: number of records loaded |
+| `last_updated` | (none) | Text sensor, `timestamp` device class: when the list was last committed (ISO 8601 UTC) |
+
+The update time is read from the system clock at `acl_commit` and stored in
+NVS with the list. It stays unknown if no `time:` source had set the clock
+by then, and for a list stored before this was added, until the next upload.
 
 C++ API, for lambdas:
 
@@ -16,6 +22,7 @@ C++ API, for lambdas:
 | `lookup_wiegand26(value, &name)` | Same, for the wiegand `on_tag` value (`facility << 16 \| card`) |
 | `AccessList::wiegand26_tag(value)` | Converts an `on_tag` value to `"facility,card"`; `""` if wider than 24 bits |
 | `version()`, `size()` | SHA-256 of the stored list, number of records |
+| `updated()` | `time_t` of the last commit, `0` if unknown |
 | `begin()`, `add()`, `commit()`, `last_error()` | The upload steps the API actions call |
 
 ```yaml
@@ -34,6 +41,8 @@ Adds `access_list` and the API actions that sync it.
 |--------------|---------|---------|
 | `access_list_id` | `acl` | Component id |
 | `access_list_action` | `acl` | Prefix of the action names |
+| `access_list_records_name` | `Access List Records` | Record count sensor name |
+| `access_list_last_updated_name` | `Access List Updated` | Last updated sensor name |
 
 ```yaml
 packages:

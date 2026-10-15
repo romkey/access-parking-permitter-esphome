@@ -1,8 +1,11 @@
 #pragma once
 
+#include <ctime>
 #include <string>
 #include <vector>
 
+#include "esphome/components/sensor/sensor.h"
+#include "esphome/components/text_sensor/text_sensor.h"
 #include "esphome/core/component.h"
 
 namespace esphome {
@@ -13,6 +16,7 @@ namespace access_list {
 //
 // An upload is begin() -> add() ... -> commit(). Records accumulate in RAM and
 // only replace the stored list once commit() verifies the count and hash.
+// commit() also stores the time from the system clock, if it has been set.
 class AccessList : public Component {
  public:
   void setup() override;
@@ -38,17 +42,28 @@ class AccessList : public Component {
 
   const std::string &version() const { return this->version_; }
   size_t size() const { return this->index_.size(); }
+  // When the stored list was committed, or 0 if unknown (the clock wasn't set,
+  // or the list predates this field).
+  time_t updated() const { return this->updated_; }
+
+  void set_records_sensor(sensor::Sensor *sensor) { this->records_sensor_ = sensor; }
+  void set_last_updated_sensor(text_sensor::TextSensor *sensor) { this->last_updated_sensor_ = sensor; }
 
  protected:
   bool fail_(const char *message);
   void abort_();
   void load_(std::string &&records);
   static std::string hash_(const std::string &records);
+  void publish_();
 
   // Live list: the raw text plus offsets of each line, sorted by tag.
   std::string records_;
   std::vector<uint32_t> index_;
   std::string version_;
+  time_t updated_{0};
+
+  sensor::Sensor *records_sensor_{nullptr};
+  text_sensor::TextSensor *last_updated_sensor_{nullptr};
 
   // Upload in progress.
   bool in_progress_{false};

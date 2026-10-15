@@ -17,6 +17,9 @@ namespace access_list {
 static const char *const TAG = "access_list";
 static const char *const NVS_NAMESPACE = "access_list";
 static const char *const NVS_KEY = "records";
+static const char *const NVS_UPDATED_KEY = "updated";
+// Clock readings before this (2024-01-01) mean the time hasn't been set yet.
+static const time_t MIN_VALID_TIME = 1704067200;
 // Drop an abandoned upload after this long without a begin/add call.
 static const uint32_t UPLOAD_TIMEOUT_MS = 60000;
 
@@ -35,8 +38,13 @@ void AccessList::setup() {
   if (nvs_open(NVS_NAMESPACE, NVS_READONLY, &handle) != ESP_OK) {
     ESP_LOGI(TAG, "No stored access list");
     this->load_(std::string());
+    this->publish_();
     return;
   }
+
+  int64_t updated = 0;
+  if (nvs_get_i64(handle, NVS_UPDATED_KEY, &updated) == ESP_OK)
+    this->updated_ = updated;
 
   size_t len = 0;
   std::string records;
@@ -52,6 +60,7 @@ void AccessList::setup() {
     records.clear();
   }
   this->load_(std::move(records));
+  this->publish_();
 }
 
 void AccessList::loop() {
@@ -63,7 +72,10 @@ void AccessList::loop() {
 }
 
 void AccessList::dump_config() {
-  ESP_LOGCONFIG(TAG, "Access list:\n  Records: %u\n  Version: %s", (unsigned) this->size(), this->version_.c_str());
+  ESP_LOGCONFIG(TAG, "Access list:\n  Records: %u\n  Version: %s\n  Updated: %lld", (unsigned) this->size(),
+                this->version_.c_str(), (long long) this->updated_);
+  LOG_SENSOR("  ", "Records", this->records_sensor_);
+  LOG_TEXT_SENSOR("  ", "Last Updated", this->last_updated_sensor_);
 }
 
 bool AccessList::begin(const std::string &version, int32_t count) {
@@ -119,11 +131,17 @@ bool AccessList::commit() {
   if (hash_(this->pending_) != this->pending_version_)
     return this->fail_("checksum mismatch");
 
+  time_t now = ::time(nullptr);
+  if (now < MIN_VALID_TIME)
+    now = 0;
+
   nvs_handle_t handle;
   esp_err_t err = nvs_open(NVS_NAMESPACE, NVS_READWRITE, &handle);
   if (err == ESP_OK) {
     // An NVS blob write is atomic: a failure here leaves the old list intact.
     err = nvs_set_blob(handle, NVS_KEY, this->pending_.data(), this->pending_.size());
+    if (err == ESP_OK)
+      err = nvs_set_i64(handle, NVS_UPDATED_KEY, now);
     if (err == ESP_OK)
       err = nvs_commit(handle);
     nvs_close(handle);
@@ -136,6 +154,8 @@ bool AccessList::commit() {
   std::string records = std::move(this->pending_);
   this->abort_();
   this->load_(std::move(records));
+  this->updated_ = now;
+  this->publish_();
   this->last_error_.clear();
   return true;
 }
@@ -205,6 +225,21 @@ void AccessList::load_(std::string &&records) {
   });
   this->version_ = hash_(this->records_);
   ESP_LOGI(TAG, "Loaded %u records", (unsigned) this->index_.size());
+}
+
+void AccessList::publish_() {
+  if (this->records_sensor_ != nullptr)
+    this->records_sensor_->publish_state(this->size());
+  if (this->last_updated_sensor_ != nullptr) {
+    // Empty shows as unknown in Home Assistant.
+    char buf[32] = "";
+    if (this->updated_ != 0) {
+      struct tm tm;
+      gmtime_r(&this->updated_, &tm);
+      strftime(buf, sizeof(buf), "%Y-%m-%dT%H:%M:%S+00:00", &tm);
+    }
+    this->last_updated_sensor_->publish_state(buf);
+  }
 }
 
 std::string AccessList::hash_(const std::string &records) {

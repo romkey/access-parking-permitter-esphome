@@ -15,6 +15,9 @@ All notable changes to this project are documented here. The format follows
 - `packages/parking-kiosk-display.yaml`: the LVGL touchscreen UI.
 - `examples/parking-permitter.yaml` for the ESP32 Access Control Base
   Board, plus ESP32 and ESP32-C3 access list examples.
+- Access List Records and Access List Updated diagnostic sensors in
+  `packages/access-list.yaml` (`records` and `last_updated` options on
+  `access_list`). The update time is stored in NVS with the list.
 - Fallback hotspot, captive portal, safe mode and factory reset buttons,
   password-protected web server, esphome-lib packages.
 - Docker, CI, lint, release and Renovate setup per
