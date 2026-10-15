@@ -25,6 +25,7 @@ the kiosk recognizes members without a network round trip.
 | `packages/parking-kiosk-display.yaml` | Touchscreen UI (ILI9488 + XPT2046, LVGL) |
 | `packages/status-led.yaml` | Status LED that blinks on warnings and errors |
 | `examples/parking-permitter.yaml` | The kiosk on the ESP32 Access Control Base Board |
+| `examples/parking-permitter-hosyond-4.yaml` | The kiosk on a Hosyond 4" ESP32 display (E32R40T) |
 | `examples/esp32-access-list.yaml`, `esp32-c3-access-list.yaml` | The access list alone on ESP32 and ESP32-C3 |
 | `docs/configuration.md` | Full configuration reference, including the sync protocol |
 
@@ -37,6 +38,9 @@ the kiosk recognizes members without a network round trip.
   **Email me a link**, **Blank permit** and **Cancel** buttons. With no
   touch for 30 seconds, it goes back to idle.
 - Unknown fob: three beeps, then an "Unknown fob" message.
+- To try the kiosk without a fob or reader, type `facility,card` (e.g.
+  `99,999`) into the **Present Fob** text entity in Home Assistant or the
+  web UI. The kiosk handles it exactly like a swipe.
 - Either permit button POSTs `{"rfid": "<facility,card>", "mode": "link"|"blank"}`
   to the `permit_webhook_url` secret, with `permit_webhook_token` in the
   `X-Device-Token` header. The screen shows the result, such as "Check your
@@ -69,6 +73,35 @@ module (MSP3526): set `parking_kiosk_display_model: ST7796`. Touch
 calibration values are typical defaults. If touches land in the wrong
 place, set the logger to `DEBUG`, touch the corners, and copy the raw
 values into the `parking_kiosk_touch_*` substitutions.
+
+### Hosyond 4" ESP32 display
+
+`examples/parking-permitter-hosyond-4.yaml` runs the same kiosk on the
+Hosyond 4" ESP32 display, sold by lcdwiki/QDtech as the
+[E32R40T](https://www.lcdwiki.com/4.0inch_ESP32-32E_Display): an ESP32-32E
+(4 MB flash, no PSRAM) with a 320x480 **ST7796** and an **XPT2046**
+resistive touch controller. Pins come from section 4.2 of the
+[specification](https://www.lcdwiki.com/res/E32R40T/E32R40T_E32N40T_Specification_V1.0.pdf):
+
+| Function | GPIO |
+|---|---|
+| LCD CS / DC / backlight | 15 / 2 / 27 (reset is tied to EN) |
+| SPI SCK / MOSI / MISO, shared by LCD and touch | 14 / 13 / 12 |
+| Touch CS / IRQ | 33 / 36 |
+| Status LED (red channel of the RGB LED, active-low) | 22 |
+| Wiegand D0 / D1 (input header) | 35 / 39 |
+| Wiegand LED / beep (I2C header) | 25 / 32 |
+
+The board has no Wiegand interface, and the reader wiring hasn't been
+worked out: the reader pins are just free header pins. IO35 and IO39 are
+input only with no pull-ups, and most readers run at 5 V, so the reader
+needs level shifting. Change the `parking_kiosk_*` reader substitutions to
+match however it gets connected. Until then, use the **Present Fob** text
+entity to present fobs.
+
+The example removes the display package's separate touch bus and LCD reset
+pin with `!remove`, and shrinks the LVGL buffer to 10% because the board has
+no PSRAM. The touch calibration defaults may need adjusting for this panel.
 
 ### Syncing the access list
 

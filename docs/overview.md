@@ -6,6 +6,7 @@ from the Member Zone webhook.
 **Kind:** app (no published firmware: the kiosk needs site secrets).
 **Hardware:** ESP32 Access Control Base Board 0.1.0 (ESP32-S3-WROOM-1
 N16R8), Wiegand reader, 3.5" 320x480 ILI9488 + XPT2046 SPI module. No I2C.
+Also a Hosyond 4" ESP32-32E display (E32R40T: ST7796 + XPT2046).
 
 ## Files
 
@@ -13,11 +14,14 @@ N16R8), Wiegand reader, 3.5" 320x480 ILI9488 + XPT2046 SPI module. No I2C.
   atomic replace via begin/add/commit.
 - `packages/access-list.yaml`: component + `acl_info/begin/add/commit` API
   actions.
-- `packages/parking-kiosk.yaml`: reader, lookup, beeps, scripts, webhook.
+- `packages/parking-kiosk.yaml`: reader, Present Fob text entity, lookup,
+  beeps, scripts, webhook.
 - `packages/parking-kiosk-display.yaml`: LVGL UI; implements the
   `parking_kiosk_ui_*` scripts.
 - `packages/status-led.yaml`: status LED.
 - `examples/parking-permitter.yaml`: the kiosk; all pins.
+- `examples/parking-permitter-hosyond-4.yaml`: the kiosk on a Hosyond 4"
+  ESP32 display (E32R40T); Wiegand on unassigned header pins.
 - `examples/esp32-access-list.yaml`, `esp32-c3-access-list.yaml`: access
   list only, to prove it builds on Xtensa and RISC-V.
 - `examples/common/base.yaml`: shared project, network and recovery config.
