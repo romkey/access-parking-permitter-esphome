@@ -15,7 +15,7 @@ substitutions:
   name: parking-permitter
   friendly_name: Parking Permitter
   comment: Parking permit kiosk on the ESP32 Access Control Base Board
-  parking_kiosk_display_model: ST7796
+#  parking_kiosk_display_model: ST7796
   status_led_pin: GPIO8
   parking_kiosk_display_data_rate: 10MHz
   parking_kiosk_d0_pin: GPIO18
