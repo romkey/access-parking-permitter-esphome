@@ -55,6 +55,12 @@
 #                                     printers ("" = Member Zone's default)
 #   parking_kiosk_http_timeout        HTTP request timeout (default 10s)
 #   parking_kiosk_member_zone_status_name  entity name
+#   parking_kiosk_test_print_name     entity name (default "Test Permit
+#                                     (Print)")
+#   parking_kiosk_test_no_print_name  entity name (default "Test Permit
+#                                     (No Print)")
+#   parking_kiosk_test_entity_category  for the two test buttons
+#                                     (default "config")
 #                                     (default "Member Zone Status")
 #   parking_kiosk_reader_led_name     entity name (default "Reader LED")
 #   parking_kiosk_reader_beep_name    entity name (default "Reader Beep")
@@ -66,6 +72,11 @@
 #                                     Member Zone Status (default "diagnostic")
 #   parking_kiosk_fob_input_name      entity name (default "Present Fob")
 #   parking_kiosk_fob_input_entity_category  (default "config")
+#
+# The two Test Permit buttons request a blank permit, with or without
+# printing, for the most recently presented fob (swiped or entered), as a
+# way to try the Member Zone API without the touchscreen. They issue a real
+# permit and email the member, so only use them on a fob you can spare.
 #
 # The Present Fob text entity takes a fob as "facility,card" (e.g. 99,999)
 # and handles it exactly as if it had been swiped on the reader: same
@@ -82,6 +93,9 @@ substitutions:
   parking_kiosk_printer_id: ""
   parking_kiosk_http_timeout: "10s"
   parking_kiosk_member_zone_status_name: "Member Zone Status"
+  parking_kiosk_test_print_name: "Test Permit (Print)"
+  parking_kiosk_test_no_print_name: "Test Permit (No Print)"
+  parking_kiosk_test_entity_category: "config"
   parking_kiosk_reader_led_name: "Reader LED"
   parking_kiosk_reader_beep_name: "Reader Beep"
   parking_kiosk_reader_entity_category: "config"
@@ -189,6 +203,25 @@ text:
           ESP_LOGI("permit", "Presenting fob %u,%u", facility, card);
           // The value the wiegand on_tag trigger delivers for this fob.
           id(parking_kiosk_present_tag).execute(std::to_string((facility << 16) | card));
+
+button:
+  # Try the Member Zone API for the last fob presented.
+  - platform: template
+    name: "${parking_kiosk_test_print_name}"
+    id: parking_kiosk_test_print
+    entity_category: "${parking_kiosk_test_entity_category}"
+    on_press:
+      - script.execute:
+          id: parking_kiosk_test_permit
+          print_permit: true
+  - platform: template
+    name: "${parking_kiosk_test_no_print_name}"
+    id: parking_kiosk_test_no_print
+    entity_category: "${parking_kiosk_test_entity_category}"
+    on_press:
+      - script.execute:
+          id: parking_kiosk_test_permit
+          print_permit: false
 
 wiegand:
   - id: parking_kiosk_reader
@@ -368,12 +401,47 @@ script:
                   id: parking_kiosk_member_zone_status
                   state: "Unreachable"
 
-  # Asks Member Zone for a permit. permit_mode is "link" (email a link to
-  # create and print one) or "blank" (issue one and print it blank).
+  # The UI's entry point. permit_mode is "link" (email a link to create and
+  # print a permit) or "blank" (issue one and print it blank).
   - id: parking_kiosk_request_permit
+    parameters:
+      permit_mode: string
+    then:
+      - script.execute:
+          id: parking_kiosk_issue_permit
+          permit_mode: !lambda "return permit_mode;"
+          print_permit: !lambda 'return permit_mode == "blank";'
+
+  # Test buttons: a blank permit for the last fob presented, from the reader
+  # or the Present Fob entity. The tag is cleared when the kiosk goes idle,
+  # so it is taken from the Last Tag H10301 sensor.
+  - id: parking_kiosk_test_permit
+    parameters:
+      print_permit: bool
+    then:
+      - lambda: |-
+          id(parking_kiosk_tag) = id(parking_kiosk_last_h10301).state;
+      - if:
+          condition:
+            lambda: 'return id(parking_kiosk_tag).empty();'
+          then:
+            - script.execute:
+                id: parking_kiosk_show_message
+                title: "No fob yet"
+                body: "Swipe a fob or enter one in Present Fob first."
+          else:
+            - script.execute:
+                id: parking_kiosk_issue_permit
+                permit_mode: "blank"
+                print_permit: !lambda "return print_permit;"
+
+  # Asks Member Zone for a permit for parking_kiosk_tag. print_permit only
+  # applies to "blank" permits.
+  - id: parking_kiosk_issue_permit
     mode: single
     parameters:
       permit_mode: string
+      print_permit: bool
     then:
       - script.stop: parking_kiosk_choice_timeout
       - script.execute:
@@ -390,7 +458,7 @@ script:
           json: !lambda |-
             root["rfid"] = id(parking_kiosk_tag);
             root["mode"] = permit_mode;
-            if (permit_mode == "blank") {
+            if (permit_mode == "blank" && print_permit) {
               // printer_id implies print.
               std::string printer_id = "${parking_kiosk_printer_id}";
               if (printer_id.empty())
@@ -421,10 +489,14 @@ script:
                         date = std::to_string(m) + "/" + std::to_string(d) + "/" + std::to_string(y);
                       JsonVariantConst print = data["print"];
                       bool printed = !print.isNull() && print["error"].isNull();
-                      if (!printed)
+                      if (print_permit && !printed)
                         ESP_LOGW("permit", "Permit issued but not printed: %s",
                                  (print["error"] | "no print result"));
-                      if (printed) {
+                      if (!print_permit) {
+                        // Test button: no printing was requested.
+                        title = "Permit issued";
+                        message = "Your permit is active until " + date + ". It wasn't printed.";
+                      } else if (printed) {
                         title = "Take your permit";
                         message = "Your permit is printing. It's valid until " + date + ".";
                       } else {

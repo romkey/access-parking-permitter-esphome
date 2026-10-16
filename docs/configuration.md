@@ -99,6 +99,9 @@ strings), such as `packages/parking-kiosk-display.yaml`; secrets
 | `parking_kiosk_printer_id` | `""` | Printer for blank permits, from `GET /api/v1/parking/printers`; empty uses Member Zone's default |
 | `parking_kiosk_http_timeout` | `10s` | HTTP request timeout |
 | `parking_kiosk_member_zone_status_name` | `Member Zone Status` | Token check result |
+| `parking_kiosk_test_print_name` | `Test Permit (Print)` | Test button name |
+| `parking_kiosk_test_no_print_name` | `Test Permit (No Print)` | Test button name |
+| `parking_kiosk_test_entity_category` | `config` | Category of the test buttons |
 | `parking_kiosk_reader_led_name` | `Reader LED` | Switch name |
 | `parking_kiosk_reader_beep_name` | `Reader Beep` | Switch name |
 | `parking_kiosk_reader_entity_category` | `config` | Category of both switches |
@@ -132,6 +135,14 @@ email address for the member. Each error `code` (`invalid_token`,
 `rate_limited`, …) gets a short message. Requests are never retried, since
 a retry issues a second permit. A request with no response says to wait
 for the email before trying again.
+
+The **Test Permit (Print)** and **Test Permit (No Print)** buttons try the
+API without the touchscreen. Each requests a `blank` permit, with or
+without `print`, for the most recently presented fob, whether it was
+swiped or entered in **Present Fob** (read from **Last Tag H10301**). The
+result shows on the kiosk screen and in the log. They issue a real
+permit and email the member, so use a fob you can spare. With no fob
+presented yet they show "No fob yet".
 
 Once the network is up, and every 24 hours, `GET /api/v1/me` checks that
 the token is valid and has `parking.issue_for_members`. **Member Zone
