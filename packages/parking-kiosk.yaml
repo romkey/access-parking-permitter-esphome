@@ -103,21 +103,27 @@ globals:
     type: std::string
   - id: parking_kiosk_name
     type: std::string
-  # millis() of the last token check Member Zone answered; 0 = none yet.
+  # millis() of the last token check attempt; 0 = none yet.
   - id: parking_kiosk_token_checked_at
+    type: uint32_t
+    initial_value: "0"
+  # How long to wait before the next token check: 24 h after a server
+  # response, 5 min after a network error so we recover promptly.
+  - id: parking_kiosk_token_check_interval
     type: uint32_t
     initial_value: "0"
 
 interval:
-  # Check the token once the network is up, then daily.
+  # Check the token once the network is up, then on the configured interval.
   - interval: 1min
     then:
       - if:
           condition:
             lambda: |-
               uint32_t at = id(parking_kiosk_token_checked_at);
+              uint32_t iv = id(parking_kiosk_token_check_interval);
               return network::is_connected() &&
-                     (at == 0 || millis() - at > 24UL * 60 * 60 * 1000);
+                     (at == 0 || millis() - at > iv);
           then:
             - script.execute: parking_kiosk_check_token
 
@@ -327,8 +333,9 @@ script:
               - lambda: |-
                   int status = response->status_code;
                   ESP_LOGD("permit", "Member Zone /me replied %d: %s", status, body.c_str());
-                  // Member Zone answered, so don't ask again until tomorrow.
+                  // Member Zone answered — back off 24 h before trying again.
                   id(parking_kiosk_token_checked_at) = millis() | 1;
+                  id(parking_kiosk_token_check_interval) = 24UL * 60 * 60 * 1000;
                   std::string state;
                   if (status == 200) {
                     JsonDocument doc = json::parse_json(body);
@@ -351,7 +358,9 @@ script:
           on_error:
             then:
               - lambda: |-
+                  // Network error — retry in 5 min so we recover promptly.
                   id(parking_kiosk_token_checked_at) = millis() | 1;
+                  id(parking_kiosk_token_check_interval) = 5UL * 60 * 1000;
               - logger.log:
                   level: WARN
                   format: "Member Zone token check failed: no response"
