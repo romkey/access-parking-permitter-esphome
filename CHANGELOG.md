@@ -30,6 +30,9 @@ All notable changes to this project are documented here. The format follows
 
 - Member Zone Status diagnostic sensor: the result of checking the token
   with `GET /api/v1/me` at startup and daily.
+- Test Permit (Print) and Test Permit (No Print) buttons: request a blank
+  permit from Member Zone, with or without printing, for the most recently
+  presented fob, to test API access.
 - `parking_kiosk_printer_id` substitution to print blank permits on a
   specific Member Zone printer.
 

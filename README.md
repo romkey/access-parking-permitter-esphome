@@ -38,6 +38,10 @@ the kiosk recognizes members without a network round trip.
   **Email me a link**, **Blank permit** and **Cancel** buttons. With no
   touch for 30 seconds, it goes back to idle.
 - Unknown fob: three beeps, then an "Unknown fob" message.
+- The **Test Permit (Print)** and **Test Permit (No Print)** buttons in
+  Home Assistant or the web UI request a blank permit, with or without
+  printing, for the last fob presented (swiped or entered). They issue a
+  real permit and email the member, so use a fob you can spare.
 - To try the kiosk without a fob or reader, type `facility,card` (e.g.
   `99,999`) into the **Present Fob** text entity in Home Assistant or the
   web UI. The kiosk handles it exactly like a swipe.
