@@ -73,13 +73,14 @@ failure.
 ## `packages/parking-kiosk.yaml`
 
 Wiegand reader, fob lookup, reader feedback and the Member Zone parking
-permit webhook.
+permit API.
 
 **Requires:** `packages/access-list.yaml`; a UI that provides the scripts
 `parking_kiosk_ui_idle`, `parking_kiosk_ui_member` (shows the global
 `parking_kiosk_name`) and `parking_kiosk_ui_message` (`title`, `body`
 strings), such as `packages/parking-kiosk-display.yaml`; secrets
-`permit_webhook_url` and `permit_webhook_token`. The UI calls
+`member_zone_url` (base URL, no trailing slash) and `member_zone_token`
+(an `mz_…` API token with the `parking.issue_for_members` scope). The UI calls
 `parking_kiosk_request_permit` (`permit_mode`: `link` or `blank`),
 `parking_kiosk_go_idle` and, on touch, `parking_kiosk_activity`.
 
@@ -93,22 +94,50 @@ strings), such as `packages/parking-kiosk-display.yaml`; secrets
 | `parking_kiosk_access_list_id` | `acl` | `access_list` id |
 | `parking_kiosk_choice_timeout` | `30s` | Back to idle with no touch on the member screen |
 | `parking_kiosk_message_timeout` | `10s` | Back to idle after a message |
-| `parking_kiosk_webhook_timeout` | `10s` | HTTP request timeout |
+| `parking_kiosk_member_zone_url` | `!secret member_zone_url` | Member Zone base URL |
+| `parking_kiosk_member_zone_token` | `!secret member_zone_token` | API token |
+| `parking_kiosk_printer_id` | `""` | Printer for blank permits, from `GET /api/v1/parking/printers`; empty uses Member Zone's default |
+| `parking_kiosk_http_timeout` | `10s` | HTTP request timeout |
+| `parking_kiosk_member_zone_status_name` | `Member Zone Status` | Token check result |
 | `parking_kiosk_reader_led_name` | `Reader LED` | Switch name |
 | `parking_kiosk_reader_beep_name` | `Reader Beep` | Switch name |
 | `parking_kiosk_reader_entity_category` | `config` | Category of both switches |
 | `parking_kiosk_last_tag_name` | `Last Tag` | Raw `on_tag` value |
 | `parking_kiosk_last_raw_name` | `Last Tag Raw` | Bits as hex |
 | `parking_kiosk_last_h10301_name` | `Last Tag H10301` | `facility,card` |
-| `parking_kiosk_tag_entity_category` | `diagnostic` | Category of the tag sensors |
+| `parking_kiosk_tag_entity_category` | `diagnostic` | Category of the tag sensors and Member Zone Status |
 | `parking_kiosk_fob_input_name` | `Present Fob` | Text entity name |
 | `parking_kiosk_fob_input_entity_category` | `config` | Category of the text entity |
 
 Setting the **Present Fob** text entity to `facility,card` (e.g. `99,999`)
 handles that fob exactly as if it had been swiped on the reader: the same
-lookup, beeps, screens and webhook. Input that isn't `0-255,0-65535` is
+lookup, beeps, screens and permit request. Input that isn't `0-255,0-65535` is
 logged and ignored. Anyone who can set the entity can request a permit for
 any member, so keep the API and web server protected.
+
+### Member Zone API
+
+Both permit buttons `POST <member_zone_url>/api/v1/parking/permit_requests`
+with `Authorization: Bearer <member_zone_token>`:
+
+| Button | Body | Result |
+|--------|------|--------|
+| Email me a link | `{"rfid": "<facility,card>", "mode": "link"}` | Member Zone emails the member a link to create and print their permit |
+| Blank permit | `{"rfid": "<facility,card>", "mode": "blank", "print": true}` (or `"printer_id"`) | An active two-week permit, printed blank, and an email with a link to record what is parked and where |
+
+The screen shows the result: the expiry date, that the permit didn't print
+(`print.error`; the permit was still issued), or that Member Zone has no
+email address for the member. Each error `code` (`invalid_token`,
+`insufficient_scope`, `not_found`, `conflict`, `ineligible_member`,
+`rate_limited`, …) gets a short message. Requests are never retried, since
+a retry issues a second permit. A request with no response says to wait
+for the email before trying again.
+
+Once the network is up, and every 24 hours, `GET /api/v1/me` checks that
+the token is valid and has `parking.issue_for_members`. **Member Zone
+Status** shows `OK`, `Token rejected`, `Token lacks
+parking.issue_for_members`, `Unreachable` or `Error <status>`; a 401 or
+403 on a permit request updates it too.
 
 ```yaml
 substitutions:
