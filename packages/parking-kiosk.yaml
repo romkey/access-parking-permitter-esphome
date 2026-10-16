@@ -1,10 +1,22 @@
 # Parking permit kiosk logic: Wiegand reader, access list check and the
-# Member Zone parking permit webhook.
+# Member Zone parking permit API.
 #
 # Swipe a fob on the Wiegand reader. If it is on the access list the kiosk
-# greets the member and offers an emailed permit link or a blank permit,
-# either of which POSTs {"rfid": "<facility,card>", "mode": "link"|"blank"}
-# to the webhook with the device token in the X-Device-Token header.
+# greets the member and offers two buttons, both of which POST to
+# <member_zone_url>/api/v1/parking/permit_requests with the token as
+# "Authorization: Bearer mz_...":
+#   link    {"rfid": "<facility,card>", "mode": "link"}: Member Zone emails
+#           the member a link to create and print their permit.
+#   blank   {"rfid": "<facility,card>", "mode": "blank", "print": true}:
+#           an active two-week permit, printed blank on Member Zone's
+#           default printer (or parking_kiosk_printer_id), plus an email
+#           with a link to record what is parked and where.
+# The local access list is only a pre-check; Member Zone's answer wins.
+# Requests are never retried: a retry would issue a second permit.
+#
+# Once the network is up, and daily after that, GET /api/v1/me checks the
+# token has the parking.issue_for_members scope; the Member Zone Status
+# sensor shows the result.
 #
 # Requires:
 #   - packages/access-list.yaml (the access_list component)
@@ -15,7 +27,10 @@
 #       parking_kiosk_ui_message(title, body)     show a message
 #     The UI calls parking_kiosk_request_permit(permit_mode) with "link" or
 #     "blank", parking_kiosk_go_idle, and parking_kiosk_activity on touch.
-#   - secrets permit_webhook_url and permit_webhook_token
+#   - secrets member_zone_url (e.g. https://members.example.org, no
+#     trailing slash) and member_zone_token (an mz_... API token with the
+#     parking.issue_for_members scope), or the two substitutions that
+#     default to them
 #   - the substitutions marked (required) below
 # Include it once: its ids are fixed.
 #
@@ -31,29 +46,42 @@
 #   parking_kiosk_choice_timeout      idle after no touch on the member
 #                                     screen (default 30s)
 #   parking_kiosk_message_timeout     idle after showing a message (default 10s)
-#   parking_kiosk_webhook_timeout     HTTP request timeout (default 10s)
+#   parking_kiosk_member_zone_url     Member Zone base URL
+#                                     (default !secret member_zone_url)
+#   parking_kiosk_member_zone_token   API token
+#                                     (default !secret member_zone_token)
+#   parking_kiosk_printer_id          Member Zone printer id for blank
+#                                     permits, from GET /api/v1/parking/
+#                                     printers ("" = Member Zone's default)
+#   parking_kiosk_http_timeout        HTTP request timeout (default 10s)
+#   parking_kiosk_member_zone_status_name  entity name
+#                                     (default "Member Zone Status")
 #   parking_kiosk_reader_led_name     entity name (default "Reader LED")
 #   parking_kiosk_reader_beep_name    entity name (default "Reader Beep")
 #   parking_kiosk_reader_entity_category  for the two switches (default "config")
 #   parking_kiosk_last_tag_name       entity name (default "Last Tag")
 #   parking_kiosk_last_raw_name       entity name (default "Last Tag Raw")
 #   parking_kiosk_last_h10301_name    entity name (default "Last Tag H10301")
-#   parking_kiosk_tag_entity_category for the three tag sensors
-#                                     (default "diagnostic")
+#   parking_kiosk_tag_entity_category for the three tag sensors and
+#                                     Member Zone Status (default "diagnostic")
 #   parking_kiosk_fob_input_name      entity name (default "Present Fob")
 #   parking_kiosk_fob_input_entity_category  (default "config")
 #
 # The Present Fob text entity takes a fob as "facility,card" (e.g. 99,999)
 # and handles it exactly as if it had been swiped on the reader: same
-# lookup, beeps, screens and webhook. Anyone who can set it can request a
-# permit for any member, so keep the API and web server protected.
+# lookup, beeps, screens and permit request. Anyone who can set it can
+# request a permit for any member, so keep the API and web server protected.
 
 substitutions:
   parking_kiosk_reader_inverted: "true"
   parking_kiosk_access_list_id: "acl"
   parking_kiosk_choice_timeout: "30s"
   parking_kiosk_message_timeout: "10s"
-  parking_kiosk_webhook_timeout: "10s"
+  parking_kiosk_member_zone_url: !secret member_zone_url
+  parking_kiosk_member_zone_token: !secret member_zone_token
+  parking_kiosk_printer_id: ""
+  parking_kiosk_http_timeout: "10s"
+  parking_kiosk_member_zone_status_name: "Member Zone Status"
   parking_kiosk_reader_led_name: "Reader LED"
   parking_kiosk_reader_beep_name: "Reader Beep"
   parking_kiosk_reader_entity_category: "config"
@@ -65,7 +93,7 @@ substitutions:
   parking_kiosk_fob_input_entity_category: "config"
 
 http_request:
-  timeout: ${parking_kiosk_webhook_timeout}
+  timeout: ${parking_kiosk_http_timeout}
   # Longer than the request timeout, so a slow server isn't a watchdog reset.
   watchdog_timeout: 15s
 
@@ -75,6 +103,29 @@ globals:
     type: std::string
   - id: parking_kiosk_name
     type: std::string
+  # millis() of the last token check attempt; 0 = none yet.
+  - id: parking_kiosk_token_checked_at
+    type: uint32_t
+    initial_value: "0"
+  # How long to wait before the next token check: 24 h after a server
+  # response, 5 min after a network error so we recover promptly.
+  - id: parking_kiosk_token_check_interval
+    type: uint32_t
+    initial_value: "0"
+
+interval:
+  # Check the token once the network is up, then on the configured interval.
+  - interval: 1min
+    then:
+      - if:
+          condition:
+            lambda: |-
+              uint32_t at = id(parking_kiosk_token_checked_at);
+              uint32_t iv = id(parking_kiosk_token_check_interval);
+              return network::is_connected() &&
+                     (at == 0 || millis() - at > iv);
+          then:
+            - script.execute: parking_kiosk_check_token
 
 output:
   - platform: gpio
@@ -111,6 +162,10 @@ text_sensor:
   - platform: template
     name: "${parking_kiosk_last_h10301_name}"
     id: parking_kiosk_last_h10301
+    entity_category: "${parking_kiosk_tag_entity_category}"
+  - platform: template
+    name: "${parking_kiosk_member_zone_status_name}"
+    id: parking_kiosk_member_zone_status
     entity_category: "${parking_kiosk_tag_entity_category}"
 
 text:
@@ -263,7 +318,58 @@ script:
           body: !lambda "return body;"
       - script.execute: parking_kiosk_message_timeout
 
-  # Calls the Member Zone device webhook. permit_mode is "link" or "blank".
+  # Checks the token with GET /api/v1/me and publishes Member Zone Status.
+  - id: parking_kiosk_check_token
+    mode: single
+    then:
+      - http_request.get:
+          url: "${parking_kiosk_member_zone_url}/api/v1/me"
+          request_headers:
+            Authorization: "Bearer ${parking_kiosk_member_zone_token}"
+          capture_response: true
+          max_response_buffer_size: 4kB
+          on_response:
+            then:
+              - lambda: |-
+                  int status = response->status_code;
+                  ESP_LOGD("permit", "Member Zone /me replied %d: %s", status, body.c_str());
+                  // Member Zone answered — back off 24 h before trying again.
+                  id(parking_kiosk_token_checked_at) = millis() | 1;
+                  id(parking_kiosk_token_check_interval) = 24UL * 60 * 60 * 1000;
+                  std::string state;
+                  if (status == 200) {
+                    JsonDocument doc = json::parse_json(body);
+                    bool scoped = false;
+                    JsonArrayConst scopes = doc["data"]["effective_scopes"];
+                    for (JsonVariantConst scope : scopes)
+                      if (scope == "parking.issue_for_members")
+                        scoped = true;
+                    state = scoped ? "OK" : "Token lacks parking.issue_for_members";
+                  } else if (status == 401) {
+                    state = "Token rejected";
+                  } else {
+                    state = "Error " + std::to_string(status);
+                  }
+                  if (state == "OK")
+                    ESP_LOGI("permit", "Member Zone token OK");
+                  else
+                    ESP_LOGW("permit", "Member Zone token check: %s", state.c_str());
+                  id(parking_kiosk_member_zone_status).publish_state(state);
+          on_error:
+            then:
+              - lambda: |-
+                  // Network error — retry in 5 min so we recover promptly.
+                  id(parking_kiosk_token_checked_at) = millis() | 1;
+                  id(parking_kiosk_token_check_interval) = 5UL * 60 * 1000;
+              - logger.log:
+                  level: WARN
+                  format: "Member Zone token check failed: no response"
+              - text_sensor.template.publish:
+                  id: parking_kiosk_member_zone_status
+                  state: "Unreachable"
+
+  # Asks Member Zone for a permit. permit_mode is "link" (email a link to
+  # create and print one) or "blank" (issue one and print it blank).
   - id: parking_kiosk_request_permit
     mode: single
     parameters:
@@ -277,61 +383,103 @@ script:
       # The request blocks the main loop, so let the UI draw the message first.
       - delay: 150ms
       - http_request.post:
-          url: !secret permit_webhook_url
+          url: "${parking_kiosk_member_zone_url}/api/v1/parking/permit_requests"
           request_headers:
             Content-Type: application/json
-            X-Device-Token: !secret permit_webhook_token
+            Authorization: "Bearer ${parking_kiosk_member_zone_token}"
           json: !lambda |-
             root["rfid"] = id(parking_kiosk_tag);
             root["mode"] = permit_mode;
+            if (permit_mode == "blank") {
+              // printer_id implies print.
+              std::string printer_id = "${parking_kiosk_printer_id}";
+              if (printer_id.empty())
+                root["print"] = true;
+              else
+                root["printer_id"] = atoi(printer_id.c_str());
+            }
           capture_response: true
           max_response_buffer_size: 2kB
           on_response:
             then:
               - lambda: |-
                   int status = response->status_code;
-                  ESP_LOGI("permit", "Webhook replied %d: %s", status, body.c_str());
+                  ESP_LOGI("permit", "Member Zone replied %d: %s", status, body.c_str());
                   JsonDocument doc = json::parse_json(body);
-                  std::string error = doc["error"] | "";
+                  std::string code = doc["error"]["code"] | "";
                   std::string title, message;
 
-                  if (status == 201) {
+                  if (status >= 200 && status < 300) {
+                    JsonVariantConst data = doc["data"];
+                    bool email_sent = data["email_sent"] | true;
                     if (permit_mode == "blank") {
                       // expires_at is ISO 8601; show the date part as M/D/YYYY.
-                      std::string expires = doc["permit"]["expires_at"] | "";
+                      std::string expires = data["permit"]["expires_at"] | "";
                       int y, m, d;
                       std::string date = expires;
                       if (sscanf(expires.c_str(), "%d-%d-%d", &y, &m, &d) == 3)
                         date = std::to_string(m) + "/" + std::to_string(d) + "/" + std::to_string(y);
-                      title = "Blank permit issued";
-                      message = "Write \"Expires " + date + "\" on your permit. "
-                                "We've emailed you a link to add the details.";
-                    } else {
+                      JsonVariantConst print = data["print"];
+                      bool printed = !print.isNull() && print["error"].isNull();
+                      if (!printed)
+                        ESP_LOGW("permit", "Permit issued but not printed: %s",
+                                 (print["error"] | "no print result"));
+                      if (printed) {
+                        title = "Take your permit";
+                        message = "Your permit is printing. It's valid until " + date + ".";
+                      } else {
+                        title = "Permit didn't print";
+                        message = "Your permit is active until " + date +
+                                  ", but the printer failed. Please tell an organizer.";
+                      }
+                      message += email_sent ? " We've emailed you a link to record your vehicle and where it's parked."
+                                            : " Member Zone has no email address for you, so add one there.";
+                    } else if (email_sent) {
                       title = "Check your email";
                       message = "We've sent you a link to create and print your parking permit.";
+                    } else {
+                      title = "No email address";
+                      message = "Member Zone has no email address for you, so it couldn't send your "
+                                "permit link. Please check with an organizer.";
                     }
-                  } else if (status == 404) {
+                  } else if (code == "invalid_token" || status == 401) {
+                    title = "Kiosk not authorized";
+                    message = "Member Zone rejected this kiosk's token. Please tell an organizer.";
+                    id(parking_kiosk_member_zone_status).publish_state("Token rejected");
+                  } else if (code == "insufficient_scope" || status == 403) {
+                    title = "Kiosk not authorized";
+                    message = "This kiosk's token can't issue parking permits. Please tell an organizer.";
+                    id(parking_kiosk_member_zone_status).publish_state("Token lacks parking.issue_for_members");
+                  } else if (code == "not_found" || status == 404) {
+                    // Also an unknown printer_id; the log has the server's message.
                     title = "Member not found";
                     message = "Member Zone doesn't recognize this fob. Please check with an organizer.";
-                  } else if (status == 401) {
-                    title = "Kiosk not authorized";
-                    message = "This kiosk's webhook token was rejected. Please tell an organizer.";
-                  } else if (status == 429) {
+                  } else if (code == "conflict" || status == 409) {
+                    title = "Couldn't issue a permit";
+                    message = permit_mode == "blank"
+                                  ? "This fob matches more than one member, or no printer is set up. "
+                                    "Please tell an organizer."
+                                  : "This fob matches more than one member. Please tell an organizer.";
+                  } else if (code == "ineligible_member" || status == 422) {
+                    title = "Not eligible";
+                    message = "This membership can't get a parking permit. Please check with an organizer.";
+                  } else if (code == "rate_limited" || status == 429) {
                     title = "Too many requests";
                     message = "Please wait a minute and try again.";
                   } else {
                     title = "Couldn't issue a permit";
-                    message = error.empty() ? "Member Zone returned error " + std::to_string(status) + "." : error;
-                    if (!message.empty())
-                      message[0] = toupper(message[0]);
+                    message = "Member Zone returned error " + std::to_string(status) +
+                              ". Please tell an organizer.";
                   }
                   id(parking_kiosk_show_message).execute(title, message);
           on_error:
             then:
               - logger.log:
                   level: WARN
-                  format: "Webhook request failed"
+                  format: "Member Zone permit request failed: no response"
+              # The server may have issued the permit before the connection
+              # failed, so don't invite an immediate retry.
               - script.execute:
                   id: parking_kiosk_show_message
                   title: "Couldn't reach Member Zone"
-                  body: "Please try again in a moment."
+                  body: "If no email arrives in a few minutes, please try again."

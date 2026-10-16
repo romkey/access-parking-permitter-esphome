@@ -7,8 +7,8 @@
 
 ESPHome firmware for the PDX Hackerspace parking permit kiosk. A member
 swipes their RFID fob on a Wiegand reader; if the fob is on the access list
-the touchscreen greets them and offers an emailed permit link or a blank
-permit, issued through the Member Zone device webhook. The access list is
+the touchscreen greets them and offers an emailed permit link or a printed
+blank permit, issued through the Member Zone API. The access list is
 synced to the device over the ESPHome native API and stored in flash, so
 the kiosk recognizes members without a network round trip.
 
@@ -21,7 +21,7 @@ the kiosk recognizes members without a network round trip.
 |------|------------|
 | `components/access_list/` | External component: RFID list stored in NVS, versioned by SHA-256, replaced atomically |
 | `packages/access-list.yaml` | The component plus the `acl_*` API actions an uploader calls |
-| `packages/parking-kiosk.yaml` | Wiegand reader, fob lookup, reader beeps and the permit webhook |
+| `packages/parking-kiosk.yaml` | Wiegand reader, fob lookup, reader beeps and the Member Zone permit API |
 | `packages/parking-kiosk-display.yaml` | Touchscreen UI (ILI9488 + XPT2046, LVGL) |
 | `packages/status-led.yaml` | Status LED that blinks on warnings and errors |
 | `examples/parking-permitter.yaml` | The kiosk on the ESP32 Access Control Base Board |
@@ -41,15 +41,24 @@ the kiosk recognizes members without a network round trip.
 - To try the kiosk without a fob or reader, type `facility,card` (e.g.
   `99,999`) into the **Present Fob** text entity in Home Assistant or the
   web UI. The kiosk handles it exactly like a swipe.
-- Either permit button POSTs `{"rfid": "<facility,card>", "mode": "link"|"blank"}`
-  to the `permit_webhook_url` secret, with `permit_webhook_token` in the
-  `X-Device-Token` header. The screen shows the result, such as "Check your
-  email" or the blank permit's expiry date to write on it, or the server's
-  error. It returns to idle after 10 seconds or when OK is tapped.
+- **Email me a link** asks Member Zone to email the member a link to
+  create and print their permit. **Blank permit** issues an active
+  two-week permit, prints it blank on Member Zone's printer, and emails a
+  link to record what is parked and where. Both POST to
+  `<member_zone_url>/api/v1/parking/permit_requests` with the
+  `member_zone_token` secret as a bearer token. The screen shows the
+  result, such as "Check your email", the permit's expiry date, a printer
+  failure, or a short message for the error. It returns to idle after 10
+  seconds or when OK is tapped.
 
-Register the kiosk under Member Zone **Settings → Webhook devices** to get
-its token. The webhook URL is
-`https://<member zone host>/webhooks/devices/parking_permits`.
+In Member Zone, an admin creates a service account for the kiosk with a
+role that grants `parking.issue_for_members`, then creates an API token
+for it under **Settings → API tokens** with that scope. The token
+(`mz_…`) is shown once: put it in `member_zone_token`, and the site's base
+URL (e.g. `https://members.example.org`) in `member_zone_url`. Tokens
+expire, 365 days by default; an admin can extend one without changing the
+secret. The **Member Zone Status** diagnostic sensor shows whether the
+kiosk's token works.
 
 ### Hardware
 
