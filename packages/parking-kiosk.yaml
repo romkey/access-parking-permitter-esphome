@@ -350,6 +350,8 @@ script:
                   id(parking_kiosk_member_zone_status).publish_state(state);
           on_error:
             then:
+              - lambda: |-
+                  id(parking_kiosk_token_checked_at) = millis() | 1;
               - logger.log:
                   level: WARN
                   format: "Member Zone token check failed: no response"
