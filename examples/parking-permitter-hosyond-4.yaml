@@ -20,6 +20,8 @@
 # the reader ends up connected.
 
 substitutions:
+  parking_kiosk_member_zone_url: !secret member_zone_url
+  parking_kiosk_member_zone_token: !secret member_zone_token
   name: parking-permitter-hosyond
   friendly_name: Parking Permitter
   comment: Parking permit kiosk on a Hosyond 4" ESP32 display (E32R40T)

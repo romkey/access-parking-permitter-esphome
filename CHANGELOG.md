@@ -6,6 +6,14 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Changed
+
+- `packages/parking-kiosk.yaml` no longer reads secrets itself. The
+  substitutions `parking_kiosk_member_zone_url` and
+  `parking_kiosk_member_zone_token` are now required; pass them from your
+  config, e.g. `parking_kiosk_member_zone_url: !secret member_zone_url`.
+  The examples do this.
+
 ### Added
 
 - `packages/access-list.yaml`: the access list component and its `acl_*`

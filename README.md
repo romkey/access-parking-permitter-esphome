@@ -24,7 +24,8 @@ the kiosk recognizes members without a network round trip.
 | `packages/parking-kiosk.yaml` | Wiegand reader, fob lookup, reader beeps and the Member Zone permit API |
 | `packages/parking-kiosk-display.yaml` | Touchscreen UI (ILI9488 + XPT2046, LVGL) |
 | `packages/status-led.yaml` | Status LED that blinks on warnings and errors |
-| `examples/parking-permitter.yaml` | The kiosk on the ESP32 Access Control Base Board |
+| `examples/parking-permitter.yaml` | The kiosk on the ESP32 Access Control Base Board, loading packages and component from GitHub |
+| `examples/parking-permitter-local.yaml` | The same kiosk using the local `packages/` and `components/` |
 | `examples/parking-permitter-hosyond-4.yaml` | The kiosk on a Hosyond 4" ESP32 display (E32R40T) |
 | `examples/esp32-access-list.yaml`, `esp32-c3-access-list.yaml` | The access list alone on ESP32 and ESP32-C3 |
 | `docs/configuration.md` | Full configuration reference, including the sync protocol |
