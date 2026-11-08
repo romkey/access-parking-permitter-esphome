@@ -1,3 +1,6 @@
+# The parking permit kiosk, pulling its packages and the access_list
+# component from GitHub (main) instead of the local copies; see
+# parking-permitter-local.yaml for the version that uses this checkout.
 # The parking permit kiosk: ESP32 Access Control Base Board 0.1.0 with a
 # Wiegand reader and a 3.5" 320x480 SPI touchscreen.
 #
@@ -51,16 +54,18 @@ psram:
 
 external_components:
   - source:
-      type: local
-      path: ../components
+      type: git
+      url: https://github.com/romkey/access-parking-permitter-esphome
+      ref: main
+      path: components
     components: [access_list]
 
 packages:
   base: !include common/base.yaml
-  access_list: !include ../packages/access-list.yaml
-  parking_kiosk: !include ../packages/parking-kiosk.yaml
-  parking_kiosk_display: !include ../packages/parking-kiosk-display.yaml
-  status_led: !include ../packages/status-led.yaml
+  access_list: github://romkey/access-parking-permitter-esphome/packages/access-list.yaml@main
+  parking_kiosk: github://romkey/access-parking-permitter-esphome/packages/parking-kiosk.yaml@main
+  parking_kiosk_display: github://romkey/access-parking-permitter-esphome/packages/parking-kiosk-display.yaml@main
+  status_led: github://romkey/access-parking-permitter-esphome/packages/status-led.yaml@main
 
 # The board's PCB routes strapping pins GPIO3, GPIO45 and GPIO46 to the
 # display header, so they're used deliberately. These entries extend the
