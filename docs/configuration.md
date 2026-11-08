@@ -78,9 +78,9 @@ permit API.
 **Requires:** `packages/access-list.yaml`; a UI that provides the scripts
 `parking_kiosk_ui_idle`, `parking_kiosk_ui_member` (shows the global
 `parking_kiosk_name`) and `parking_kiosk_ui_message` (`title`, `body`
-strings), such as `packages/parking-kiosk-display.yaml`; secrets
-`member_zone_url` (base URL, no trailing slash) and `member_zone_token`
-(an `mz_…` API token with the `parking.issue_for_members` scope). The UI calls
+strings), such as `packages/parking-kiosk-display.yaml`; the required
+substitutions below for the Member Zone base URL and API token (the package
+reads no secrets; pass them with `!secret` from your config). The UI calls
 `parking_kiosk_request_permit` (`permit_mode`: `link` or `blank`),
 `parking_kiosk_go_idle` and, on touch, `parking_kiosk_activity`.
 
@@ -94,8 +94,8 @@ strings), such as `packages/parking-kiosk-display.yaml`; secrets
 | `parking_kiosk_access_list_id` | `acl` | `access_list` id |
 | `parking_kiosk_choice_timeout` | `30s` | Back to idle with no touch on the member screen |
 | `parking_kiosk_message_timeout` | `10s` | Back to idle after a message |
-| `parking_kiosk_member_zone_url` | `!secret member_zone_url` | Member Zone base URL |
-| `parking_kiosk_member_zone_token` | `!secret member_zone_token` | API token |
+| `parking_kiosk_member_zone_url` | (required) | Member Zone base URL, no trailing slash; pass `!secret member_zone_url` |
+| `parking_kiosk_member_zone_token` | (required) | API token (`mz_…`, `parking.issue_for_members` scope); pass `!secret member_zone_token` |
 | `parking_kiosk_printer_id` | `""` | Printer for blank permits, from `GET /api/v1/parking/printers`; empty uses Member Zone's default |
 | `parking_kiosk_http_timeout` | `10s` | HTTP request timeout |
 | `parking_kiosk_member_zone_status_name` | `Member Zone Status` | Token check result |

@@ -31,8 +31,9 @@ Also a Hosyond 4" ESP32-32E display (E32R40T: ST7796 + XPT2046).
 - `access-list.yaml`: the `access_list` external component, encrypted `api:`.
 - `parking-kiosk.yaml`: `access-list.yaml`; a UI providing
   `parking_kiosk_ui_idle`, `parking_kiosk_ui_member`,
-  `parking_kiosk_ui_message(title, body)`; secrets `member_zone_url`,
-  `member_zone_token`; pin substitutions `parking_kiosk_d0_pin`,
+  `parking_kiosk_ui_message(title, body)`; substitutions
+  `parking_kiosk_member_zone_url`, `_member_zone_token` (pass them with
+  `!secret`); pin substitutions `parking_kiosk_d0_pin`,
   `_d1_pin`, `_reader_led_pin`, `_reader_beep_pin`.
 - `parking-kiosk-display.yaml`: `parking-kiosk.yaml`; display, touch and
   backlight pin substitutions.

@@ -27,10 +27,12 @@
 #       parking_kiosk_ui_message(title, body)     show a message
 #     The UI calls parking_kiosk_request_permit(permit_mode) with "link" or
 #     "blank", parking_kiosk_go_idle, and parking_kiosk_activity on touch.
-#   - secrets member_zone_url (e.g. https://members.example.org, no
-#     trailing slash) and member_zone_token (an mz_... API token with the
-#     parking.issue_for_members scope), or the two substitutions that
-#     default to them
+#   - the substitutions parking_kiosk_member_zone_url (e.g.
+#     https://members.example.org, no trailing slash) and
+#     parking_kiosk_member_zone_token (an mz_... API token with the
+#     parking.issue_for_members scope). The package reads no secrets itself;
+#     the including config passes them, e.g.
+#       parking_kiosk_member_zone_url: !secret member_zone_url
 #   - the substitutions marked (required) below
 # Include it once: its ids are fixed.
 #
@@ -46,10 +48,8 @@
 #   parking_kiosk_choice_timeout      idle after no touch on the member
 #                                     screen (default 30s)
 #   parking_kiosk_message_timeout     idle after showing a message (default 10s)
-#   parking_kiosk_member_zone_url     Member Zone base URL
-#                                     (default !secret member_zone_url)
-#   parking_kiosk_member_zone_token   API token
-#                                     (default !secret member_zone_token)
+#   parking_kiosk_member_zone_url     (required) Member Zone base URL
+#   parking_kiosk_member_zone_token   (required) API token
 #   parking_kiosk_printer_id          Member Zone printer id for blank
 #                                     permits, from GET /api/v1/parking/
 #                                     printers ("" = Member Zone's default)
@@ -88,8 +88,6 @@ substitutions:
   parking_kiosk_access_list_id: "acl"
   parking_kiosk_choice_timeout: "30s"
   parking_kiosk_message_timeout: "10s"
-  parking_kiosk_member_zone_url: !secret member_zone_url
-  parking_kiosk_member_zone_token: !secret member_zone_token
   parking_kiosk_printer_id: ""
   parking_kiosk_http_timeout: "10s"
   parking_kiosk_member_zone_status_name: "Member Zone Status"
