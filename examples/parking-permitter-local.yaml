@@ -12,6 +12,8 @@
 #   Status LED       GPIO8
 
 substitutions:
+  parking_kiosk_member_zone_url: !secret member_zone_url
+  parking_kiosk_member_zone_token: !secret member_zone_token
   name: parking-permitter
   friendly_name: Parking Permitter
   comment: Parking permit kiosk on the ESP32 Access Control Base Board
