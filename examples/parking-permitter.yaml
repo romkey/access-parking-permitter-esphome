@@ -61,13 +61,22 @@ external_components:
       ref: main
       path: components
     components: [access_list]
+    # Check GitHub for updates on every compile instead of the default 1d.
+    refresh: 0s
 
 packages:
-  base: !include common/base.yaml
-  access_list: github://romkey/access-parking-permitter-esphome/packages/access-list.yaml@main
-  parking_kiosk: github://romkey/access-parking-permitter-esphome/packages/parking-kiosk.yaml@main
-  parking_kiosk_display: github://romkey/access-parking-permitter-esphome/packages/parking-kiosk-display.yaml@main
-  status_led: github://romkey/access-parking-permitter-esphome/packages/status-led.yaml@main
+  # One remote package; refresh: 0s checks GitHub for updates on every
+  # compile instead of the default 1d.
+  kiosk:
+    url: https://github.com/romkey/access-parking-permitter-esphome
+    ref: main
+    refresh: 0s
+    files:
+      - examples/common/base.yaml
+      - packages/access-list.yaml
+      - packages/parking-kiosk.yaml
+      - packages/parking-kiosk-display.yaml
+      - packages/status-led.yaml
 
 # The board's PCB routes strapping pins GPIO3, GPIO45 and GPIO46 to the
 # display header, so they're used deliberately. These entries extend the
